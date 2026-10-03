@@ -93,12 +93,13 @@ const runner = new Runner(
       throw new Error(
         'This legacy task has no Intelligence conversation. Create a new scheduled task from a conversation.',
       );
-    progress('Running this task in its Intelligence conversation.');
+    progress('Running this task in its conversation.');
     const backend = workspace.localRuntime(threadId);
     const text = await (backend === 'codex' ? codexPlatform : platform).turn(
       threadId,
       claim.prompt,
       signal,
+      { background: true },
     );
     return { text, sources: [], sample: false };
   },

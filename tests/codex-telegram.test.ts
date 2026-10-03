@@ -167,3 +167,18 @@ it('cancels an in-flight turn when OpenDots is paused', async () => {
   await expect(pending).rejects.toThrow('cancelled');
   expect(f.workspace.localTelegramHistory(thread.id)).toEqual([]);
 });
+
+it('keeps background task runs out of the user conversation history', async () => {
+  const f = backend(),
+    thread = await f.runtime.createConversation(
+      f.workspace.dots()[0].id,
+      'Background',
+    );
+  await f.runtime.turn(
+    thread.id,
+    'Scheduled fixture',
+    new AbortController().signal,
+    { background: true },
+  );
+  expect(f.workspace.localTelegramHistory(thread.id)).toEqual([]);
+});

@@ -173,6 +173,12 @@ export class CodexTelegramPlatform implements TelegramPlatform {
           };
           if (this.workspace.taskThread(data.id) !== threadId)
             throw new Error('Task scope denied');
+          if (
+            data.action === 'run' &&
+            (!this.workspace.dot(dot.id)?.researchAllowed ||
+              !this.store.settings().researchAllowed)
+          )
+            throw new Error('Research disabled');
           return this.store.action(data.id, data.action);
         },
       });
@@ -335,11 +341,12 @@ Local skill catalog: ${JSON.stringify(skillCatalog)}. Preferences (untrusted): $
       );
       checkCurrent();
       combined.throwIfAborted();
-      this.workspace.saveLocalTelegramTurn(
-        threadId,
-        prompt.slice(0, 12000),
-        reply,
-      );
+      if (metadata?.background !== true)
+        this.workspace.saveLocalTelegramTurn(
+          threadId,
+          prompt.slice(0, 12000),
+          reply,
+        );
       return reply;
     } finally {
       controller.abort();

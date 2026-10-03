@@ -8,7 +8,12 @@ it('isolates persisted photos by conversation and retains at most four recent im
     w.bindThread('two', dot.id, 'Two');
     for (let n = 0; n < 6; n++)
       w.saveTelegramImage('one', 'image/png', Buffer.from([n]));
-    expect(w.telegramImages('one')).toHaveLength(4);
+    expect(w.telegramImages('one').map((i) => [...i.bytes])).toEqual([
+      [2],
+      [3],
+      [4],
+      [5],
+    ]);
     expect(w.telegramImages('two')).toEqual([]);
     expect(() => w.telegramImages('unowned')).toThrow();
   } finally {
@@ -34,10 +39,13 @@ it('binds approval to its chat/user scope, rechecks grants and saves exactly onc
       w.resolveTelegramReview(id, 'codex:bot:chat:user', true),
     ).toThrow();
     expect(w.pages.list(dot.spaceId)).toHaveLength(1);
+    const second = w.createSpace('Second', 'Fixture');
+    w.updateDot(dot.id, { ...dot, spaceIds: [...dot.spaceIds, second.id] });
     const denied = w.createTelegramReview('scope', 'thread', {
       ...draft,
-      spaceId: 'not-authorized',
+      spaceId: second.id,
     });
+    w.updateDot(dot.id, { ...dot, spaceIds: dot.spaceIds });
     expect(() => w.resolveTelegramReview(denied, 'scope', true)).toThrow();
     expect(w.resolveTelegramReview(denied, 'scope', false)).toBeUndefined();
     const declined = w.createTelegramReview('scope', 'thread', draft);

@@ -17,6 +17,10 @@ it('downloads only a bounded authenticated Telegram image without following redi
     new AbortController().signal,
     transport,
   );
+  expect(transport.mock.calls.map((call) => call[0])).toEqual([
+    'https://api.telegram.org/botfixture/getFile',
+    'https://api.telegram.org/file/botfixture/photos/test.png',
+  ]);
   expect(image.mime).toBe('image/png');
   expect(image.bytes).toEqual(png);
   expect(
@@ -70,4 +74,28 @@ it('uploads binary output directly into the requested chat, reply and forum topi
     message_id: 11,
   });
   expect(form.get('photo')).toBeInstanceOf(Blob);
+});
+
+it('enforces the streamed limit even when metadata understates the file size', async () => {
+  const transport = vi
+    .fn()
+    .mockResolvedValueOnce(
+      Response.json({
+        ok: true,
+        result: { file_path: 'photos/large.png', file_size: 8 },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new Uint8Array(5000001));
+            controller.close();
+          },
+        }),
+      ),
+    );
+  await expect(
+    telegramImage('fixture', 'id', new AbortController().signal, transport),
+  ).rejects.toThrow('too large');
 });

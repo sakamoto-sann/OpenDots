@@ -204,8 +204,15 @@ export class TelegramBot {
           : message?.chat?.type !== 'private' ||
             chatId !== userId ||
             senderId !== userId)
-      )
+      ) {
+        await this.api(
+          token,
+          'answerCallbackQuery',
+          { callback_query_id: callback.id, text: '承認できません。' },
+          signal,
+        );
         return;
+      }
       const match = /^review:([ad]):([a-f0-9-]{36})$/.exec(callback.data ?? '');
       if (!match) return;
       const scope =
@@ -215,8 +222,10 @@ export class TelegramBot {
           : `${botId}:${chatId}`);
       let notice = '承認は期限切れ、処理済み、または権限がありません。';
       try {
-        if (this.platform.store.settings().paused && match[1] === 'a')
+        if (this.platform.store.settings().paused && match[1] === 'a') {
+          notice = 'OpenDotsは停止中です。再開後に承認してください。';
           throw new Error('Paused');
+        }
         const page = this.platform.workspace.resolveTelegramReview(
           match[2],
           scope,

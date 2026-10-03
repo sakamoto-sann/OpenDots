@@ -24,6 +24,14 @@ export async function publicProxy() {
           timeout: 30000,
         },
         (reply) => {
+          const truncated = () => {
+            if (!res.headersSent) {
+              res.writeHead(502);
+              res.end();
+            } else res.destroy();
+          };
+          reply.on('aborted', truncated);
+          reply.on('error', truncated);
           res.writeHead(reply.statusCode ?? 502, reply.headers);
           reply.pipe(res);
         },

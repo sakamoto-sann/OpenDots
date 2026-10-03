@@ -9,6 +9,7 @@ services:
       context: .
       target: computer
     command: ['true']
+    entrypoint: []
   computer-supervisor:
     image: opendots-supervisor:b6932d3-dot-auth
     build:

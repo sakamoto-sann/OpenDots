@@ -15,6 +15,7 @@ import {
   readdir,
   realpath,
   stat,
+  lstat,
 } from 'node:fs/promises';
 import { resolve, dirname, relative } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -34,6 +35,7 @@ export async function startComputer() {
     throw new Error('Computer identity required');
   if (
     process.platform !== 'linux' ||
+    process.pid !== 1 ||
     process.env.OPENDOTS_COMPUTER_CONTAINER !== '1'
   )
     throw new Error('This computer service must run in its isolated container');
@@ -72,6 +74,7 @@ export async function startComputer() {
     snapshotId = Date.now(),
     refs: Record<string, string> = {},
     busy = false,
+    retiring = false,
     holder: 'bot' | 'human' = 'bot',
     resumeSnapshotRequired = true;
   let controlRequest: { id: string; status: string } | undefined;
@@ -142,6 +145,8 @@ export async function startComputer() {
       throw new Error('Path denied');
     if (writing) {
       try {
+        if ((await lstat(candidate)).isSymbolicLink())
+          throw new Error('Path denied');
         const existing = await realpath(candidate);
         if (!existing.startsWith(root + '/')) throw new Error('Path denied');
       } catch (error) {
@@ -168,7 +173,7 @@ export async function startComputer() {
       return reply(401, { error: 'Unauthorized' });
     if (req.url === '/control' && req.method === 'GET')
       return reply(200, control());
-    if (busy)
+    if (busy || retiring)
       return reply(409, { error: 'Computer busy; refresh before retrying' });
     busy = true;
     try {
@@ -218,7 +223,11 @@ export async function startComputer() {
       if (
         action.startsWith('human_')
           ? holder !== 'human'
-          : holder !== 'bot' && !['read', 'screenshot'].includes(action)
+          : holder !== 'bot' &&
+            !(
+              req.headers['x-opendots-actor'] === 'owner' &&
+              ['read', 'screenshot'].includes(action)
+            )
       )
         return reply(409, { error: 'Control is held by the other actor' });
       if (action.startsWith('files_')) {
@@ -246,6 +255,14 @@ export async function startComputer() {
         return reply(200, { written: true });
       }
       if (action === 'exec') {
+        const before = new Set(await readdir('/proc'));
+        const retire = () => {
+          if (retiring) return;
+          retiring = true;
+          // Exiting the container's main process lets Docker terminate its entire
+          // PID namespace, including descendants that escaped the shell group.
+          setTimeout(() => process.exit(1), 200);
+        };
         const result = await new Promise<{
           stdout: string;
           stderr: string;
@@ -277,6 +294,10 @@ export async function startComputer() {
               'Command cancelled, failed or exceeded its limit',
             );
             kill();
+            retire();
+            child.stdout.destroy();
+            child.stderr.destroy();
+            reject(failure);
           };
           const timeout = setTimeout(fail, Number(parsed.timeoutMs));
           child.stdout.setEncoding('utf8');
@@ -294,9 +315,26 @@ export async function startComputer() {
           res.once('close', () => {
             if (!res.writableEnded) fail();
           });
-          child.once('close', (code) => {
+          child.once('close', async (code) => {
             clearTimeout(timeout);
             kill();
+            try {
+              const after = await readdir('/proc');
+              if (
+                after.some(
+                  (pid) =>
+                    /^\d+$/.test(pid) &&
+                    !before.has(pid) &&
+                    pid !== String(child.pid),
+                )
+              ) {
+                fail();
+                return;
+              }
+            } catch {
+              fail();
+              return;
+            }
             if (failure || code === null)
               reject(failure ?? new Error('Command failed'));
             else resolve({ stdout, stderr, exitCode: code });
@@ -307,8 +345,8 @@ export async function startComputer() {
       const target = await current();
       if (action === 'navigate') {
         await validateUrl(String(parsed.url));
-        await target.goto(String(parsed.url), { timeout: 30000 });
         invalidate();
+        await target.goto(String(parsed.url), { timeout: 30000 });
         return reply(200, {
           url: await target.url(),
           title: await target.title(),
@@ -416,6 +454,7 @@ export async function startComputer() {
             error: 'Take a fresh snapshot before using refs',
           });
         const locator = target.locator('xpath=' + refs[String(parsed.ref)]);
+        invalidate();
         if (action === 'click') await locator.click();
         else {
           await locator.fill(String(parsed.text));

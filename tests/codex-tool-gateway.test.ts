@@ -16,6 +16,7 @@ const invoke = (socketPath: string, path: string, body: unknown) =>
 it('exposes a scoped catalog, validates arguments and rechecks revocation after execution', async () => {
   const directory = await mkdtemp('/tmp/opendots-gateway-test-');
   let allowed = true,
+    revokeDuringCall = false,
     calls = 0;
   const gateway = await codexToolGateway(
     directory,
@@ -26,6 +27,7 @@ it('exposes a scoped catalog, validates arguments and rechecks revocation after 
         parameters: z.object({ id: z.string() }).strict(),
         execute: async () => {
           calls++;
+          if (revokeDuringCall) allowed = false;
           return 'safe-result';
         },
       },
@@ -50,12 +52,14 @@ it('exposes a scoped catalog, validates arguments and rechecks revocation after 
     });
     expect(invalid.isError).toBe(true);
     expect(calls).toBe(1);
-    allowed = false;
-    await invoke(directory + '/tools.sock', '/call', {
+    revokeDuringCall = true;
+    const revoked = await invoke(directory + '/tools.sock', '/call', {
       name: 'read_fixture',
       arguments: { id: 'two' },
     });
-    expect(calls).toBe(1);
+    expect(revoked.isError).toBe(true);
+    expect(calls).toBe(2);
+    expect(JSON.stringify(revoked)).not.toContain('safe-result');
   } finally {
     await gateway.close();
     await rm(directory, { recursive: true });

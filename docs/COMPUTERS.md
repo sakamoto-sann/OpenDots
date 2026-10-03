@@ -63,3 +63,7 @@ A configured endpoint is not evidence that Docker successfully provisioned a com
 The source revision and the narrow per-Dot credential patch are documented in [deployment/computers](../deployment/computers/README.md). On a master-token or image change, the supervisor replaces owned computer containers on their next ensure request, retaining their profile and workspace volumes. This ends any in-flight activity; coordinate updates with active work.
 
 Automated tests use controlled service fixtures for policy, request, and lifecycle behavior. Live Docker, model, Slack, and voice checks must be recorded separately from those tests.
+
+### Upgrade the local supervisor port
+
+This fork defaults to port 4314. Existing installations using port 4312 must set `COMPUTER_SUPERVISOR_PORT=4312` to retain it, or update `COMPUTER_SUPERVISOR_URL` to `http://127.0.0.1:4314` before restarting services. Shell timeout, cancellation or unexpected surviving descendants retire and restart the Computer container to terminate its entire process namespace. Workspace and profile volumes are retained; take a new browser snapshot afterward.

@@ -327,12 +327,13 @@ it('authorizes review callbacks against the original chat owner and saves and de
       message: { message_id: 55, chat: { id: chat, type: 'private' } },
     },
   });
-  f.updates([
-    callback(1, 999),
-    callback(2, 123, 999),
-    callback(3),
-    callback(4),
-  ]);
+  f.updates([callback(1, 999), callback(2, 123, 999)]);
+  const bot = f.start();
+  await vi.waitFor(() => expect(f.workspace.telegramOffset('321')).toBe(3));
+  expect(f.workspace.pages.list(dot.spaceId)).toEqual([]);
+  expect(f.uploads).toEqual([]);
+  await bot.stop();
+  f.updates([callback(3), callback(4)]);
   f.start();
   await vi.waitFor(() => expect(f.workspace.telegramOffset('321')).toBe(5));
   expect(f.workspace.pages.list(dot.spaceId)).toHaveLength(1);
