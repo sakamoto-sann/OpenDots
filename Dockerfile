@@ -16,10 +16,13 @@ EXPOSE 4310
 CMD ["node", "dist/server/server/index.js"]
 
 FROM node:24-bookworm-slim AS browser
-ENV NODE_ENV=production BROWSER_HOST=0.0.0.0 BROWSER_PORT=4311 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV NODE_ENV=production BROWSER_HOST=0.0.0.0 BROWSER_PORT=4311 BROWSER_EXECUTABLE_PATH=/usr/bin/chromium BROWSER_CHROMIUM_SANDBOX=0
+ENV XDG_CONFIG_HOME=/tmp/chromium-config XDG_CACHE_HOME=/tmp/chromium-cache
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --omit=dev && npx playwright install --with-deps chromium && chmod -R a+rX /ms-playwright
+RUN apt-get update && apt-get install -y --no-install-recommends chromium fonts-liberation \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm ci --omit=dev
 COPY --from=build /app/dist/server ./dist/server
 USER node
 EXPOSE 4311

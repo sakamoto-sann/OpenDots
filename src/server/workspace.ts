@@ -20,6 +20,8 @@ export class WorkspaceStore {
       CREATE TABLE IF NOT EXISTS spaces(id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL, createdAt INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS dots(id TEXT PRIMARY KEY, spaceId TEXT NOT NULL, name TEXT NOT NULL, instructions TEXT NOT NULL, researchAllowed INTEGER NOT NULL, memoryAllowed INTEGER NOT NULL, createdAt INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS thread_bindings(id TEXT PRIMARY KEY, dotId TEXT NOT NULL, ownerId TEXT NOT NULL, title TEXT NOT NULL, createdAt INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS telegram_threads(chatId TEXT PRIMARY KEY, threadId TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS telegram_state(botId TEXT PRIMARY KEY, nextOffset INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS task_threads(taskId TEXT PRIMARY KEY, threadId TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS calls(id TEXT PRIMARY KEY, threadId TEXT NOT NULL, startedAt INTEGER NOT NULL, endedAt INTEGER, status TEXT NOT NULL, transcript TEXT NOT NULL, error TEXT);
       CREATE TABLE IF NOT EXISTS captures(threadId TEXT PRIMARY KEY, value TEXT NOT NULL);`);
@@ -259,6 +261,31 @@ export class WorkspaceStore {
         value.learningContainerId ?? null,
       );
     return value;
+  }
+  telegramThread(chatId: string): string | undefined {
+    const row = this.db
+      .prepare('SELECT threadId FROM telegram_threads WHERE chatId=?')
+      .get(chatId) as { threadId: string } | undefined;
+    return row?.threadId;
+  }
+  telegramOffset(botId: string): number | undefined {
+    const row = this.db
+      .prepare('SELECT nextOffset FROM telegram_state WHERE botId=?')
+      .get(botId) as { nextOffset: number } | undefined;
+    return row?.nextOffset;
+  }
+  setTelegramOffset(botId: string, nextOffset: number) {
+    this.db
+      .prepare(
+        'INSERT INTO telegram_state (botId, nextOffset) VALUES (?, ?) ON CONFLICT(botId) DO UPDATE SET nextOffset=excluded.nextOffset',
+      )
+      .run(botId, nextOffset);
+  }
+  bindTelegramThread(chatId: string, threadId: string, dotId: string) {
+    this.requireThread(threadId, dotId);
+    this.db
+      .prepare('INSERT INTO telegram_threads (chatId, threadId) VALUES (?, ?)')
+      .run(chatId, threadId);
   }
   requireThread(id: string, dotId?: string): Conversation {
     const thread = this.conversations().find((thread) => thread.id === id);

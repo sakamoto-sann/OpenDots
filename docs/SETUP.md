@@ -56,14 +56,15 @@ Back up both storage layers: SQLite contains page content and thread bindings; t
 
 Parallel is selected by default (`WEB_SEARCH_PROVIDER=parallel`). Live research needs the model configuration, but no browser worker. An optional server-side `PARALLEL_API_KEY` enables authenticated usage and higher limits. The anonymous MCP endpoint is free for light use. Queries, selected URLs, research objectives and a stable session identifier go to Parallel. See [public-web research](../README.md#public-web-research) for data sharing, permissions and limitations.
 
-Set `WEB_SEARCH_PROVIDER=disabled` to turn off these research tools, or `WEB_SEARCH_PROVIDER=browser` for the existing URL-only reader. The browser service reads a supplied public URL and returns page text and a capture. Configure `BROWSER_URL` and `BROWSER_SECRET`, then run:
+Set `WEB_SEARCH_PROVIDER=disabled` to turn off these research tools, or `WEB_SEARCH_PROVIDER=browser` for the existing URL-only reader. The browser service reads a supplied public URL and returns page text and a capture. Install Chrome or Chromium on the browser host. The reader uses Stagehand v4 with a fresh temporary profile and no model API calls. Configure `BROWSER_URL` and `BROWSER_SECRET`, then run:
 
 ```sh
-npx playwright install chromium
 npm run browser
 ```
 
-Use the same secret on the app and browser processes. Browser navigation is read-only with JavaScript disabled. Private addresses, redirects, and authenticated pages are unsupported; provide a canonical public URL. This is a bounded research tool, not a general desktop or shell.
+Use the same secret on the app and browser processes. Source JavaScript is blocked. A local snapshot gateway retrieves documents, CSS, images, and fonts through the DNS-pinned transport; the isolated Stagehand browser cannot connect directly to source sites or private addresses. Set `BROWSER_EXECUTABLE_PATH` if Chrome is outside the usual installation paths. The Docker browser image installs system Chromium and uses the existing container isolation with Chromium sandbox disabled (`BROWSER_CHROMIUM_SANDBOX=0`); native runs keep that sandbox enabled. Private addresses, redirects, and authenticated pages are unsupported; provide a canonical public URL. This is a bounded research tool, not a general desktop or shell.
+
+Run `npm run test:browser` to verify rendering and network restrictions with Stagehand and Vitest. These tests launch a fresh browser against disposable local fixtures and require no provider credentials.
 
 ## Persistent Dot computers
 
@@ -108,6 +109,40 @@ This template maps permitted Slack users to the single OpenDots owner. Replies a
 From an allowed user, mention the bot and verify a response in the same Slack thread. Reply in that thread and confirm continuity. Check that an unrelated thread and an unapproved user cannot invoke it. Pause the assistant in OpenDots and verify that a permitted request receives a paused notice. Check Settings & setup for channel connection failures.
 
 Local tests exercise channel behavior with fixtures. A live Slack mention/reply remains unverified until you provision the managed connection and model credentials. [Channels SDK documentation](https://github.com/CopilotKit/channels-sdk) describes extending the adapter and channel behavior.
+
+## Telegram
+
+Create a bot with [BotFather](https://t.me/BotFather) and keep its token in the server's `.env`. Set the numeric Telegram user ID of the **one person** allowed to talk to it. You can obtain your ID from a Telegram ID bot, or inspect a private-chat update through the Bot API on your own machine; do not paste the bot token into a chat or issue.
+
+```dotenv
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_USER_ID=REPLACE_WITH_NUMERIC_USER_ID
+# TELEGRAM_DOT_ID=REPLACE_WITH_DOT_ID
+```
+
+`TELEGRAM_DOT_ID` selects an existing Dot; if omitted, the initial Dot is used. Configure `INTELLIGENCE_API_KEY`, `OPENAI_API_KEY`, and `OPENAI_MODEL` as described above. Restart the server, then send `/start` and a text message to the bot in a private chat. The bridge uses long polling, so the server needs outbound HTTPS access to `api.telegram.org`; no public webhook or inbound port is needed. Run only one OpenDots instance with this bot token, and remove any existing webhook before enabling polling.
+
+Private text is accepted only from `TELEGRAM_USER_ID`. The Bot API numeric sender and chat IDs are checked; display names and usernames are ignored. The chat keeps one conversation with the selected Dot across restarts. If you change `TELEGRAM_DOT_ID` after first use, use a new bot or clear its saved mapping before messaging; the existing conversation is tied to its original Dot. Replies are plain text, split to fit Telegram's message limit. Telegram calls, files, buttons, and approval cards are not supported by this bridge.
+
+The bot token stays on the server. A live end-to-end check requires your bot token, allowed user ID, model credentials, and a running server; local code checks do not prove Telegram delivery.
+
+### Groups and forum topics
+
+Add your bot to the group and explicitly allow its numeric chat ID (negative for groups/supergroups):
+
+```dotenv
+TELEGRAM_GROUP_IDS=-1001234567890,-123456789
+# Optional additional users. TELEGRAM_USER_ID is always allowed.
+TELEGRAM_GROUP_USER_IDS=123456789,987654321
+```
+
+Leave `TELEGRAM_GROUP_IDS` empty to disable groups. Unknown groups/users, anonymous administrators, channel posts, bot senders and unaddressed messages are ignored. Allowed users can mention `@YourBotUsername`, send `/start@YourBotUsername`, or reply to a message sent by this bot. Mentions use Telegram message entities, including UTF-16 offsets for emoji. Forwarding a bot message does not count as replying to it.
+
+For ordinary `@username` mentions to reach the bot, disable **Group Privacy** through BotFather's `/setprivacy`, then remove/re-add the bot if needed. With privacy enabled, use `/start@YourBotUsername` followed by replies to the bot instead. The application still filters all received messages by numeric group/user IDs and explicit addressing. See [Telegram's message visibility rules](https://core.telegram.org/bots/faq#what-messages-will-my-bot-get).
+
+Obtain your group's numeric ID from a Bot API `getUpdates` result (`message.chat.id`) before starting OpenDots polling. Read it locally, keep the token out of logs and chat, and do not run two polling clients simultaneously. If Telegram migrates a basic group to a supergroup, update the allowlist with its new ID; it starts a separate conversation.
+
+Replies attach to the incoming message and preserve the forum topic. History is persisted separately for each bot, group, topic and allowed user. Private conversations are never reused in groups. Other group members can see the bot's group replies; each allowed user can invoke the selected Dot's configured tools, so add only users you trust. Pause controls and Dot permissions continue to apply. Approval cards still require the web app.
 
 ## Calls
 

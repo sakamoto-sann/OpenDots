@@ -20,6 +20,11 @@ export interface PlatformConfig extends WebConfig {
   slackTeam?: string;
   slackUsers: string[];
   slackDotId?: string;
+  telegramBotToken?: string;
+  telegramUserId?: string;
+  telegramDotId?: string;
+  telegramGroupIds?: string[];
+  telegramGroupUserIds?: string[];
   runtimeUrl: string;
   ownerToken?: string;
 }

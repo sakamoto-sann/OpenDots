@@ -2,10 +2,8 @@ import { serve, type HttpBindings } from '@hono/node-server';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { timingSafeEqual } from 'node:crypto';
-import { chromium } from 'playwright';
 import { z } from 'zod';
-import { validateUrl } from './security.js';
-import { readResource } from './transport.js';
+import { readPublicPage } from './reader.js';
 
 const secret = process.env.BROWSER_SECRET;
 if (!secret || secret.length < 24)
@@ -33,11 +31,9 @@ app.post('/browse', async (c) => {
     return c.json({ error: 'A valid URL is required.' }, 400);
   if (busy) return c.json({ error: 'Browser is busy. Retry shortly.' }, 429);
   busy = true;
-  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   const controller = new AbortController();
   const abort = () => {
     controller.abort(new Error('Browser request cancelled.'));
-    void browser?.close();
   };
   const disconnected = () => {
     if (!c.env.outgoing.writableFinished) abort();
@@ -45,74 +41,12 @@ app.post('/browse', async (c) => {
   c.req.raw.signal.addEventListener('abort', abort, { once: true });
   c.env.outgoing.on('close', disconnected);
   const deadline = setTimeout(abort, 40_000);
-  let mainError: string | undefined;
   try {
-    await validateUrl(parsed.data.url);
-    browser = await chromium.launch({
-      headless: true,
-      args: ['--disable-dev-shm-usage'],
-    });
-    controller.signal.throwIfAborted();
-    const context = await browser.newContext({
-      javaScriptEnabled: false,
-      serviceWorkers: 'block',
-      acceptDownloads: false,
-      viewport: { width: 1200, height: 800 },
-    });
-    let count = 0;
-    await context.route('**/*', async (route) => {
-      const request = route.request();
-      if (
-        ++count > 50 ||
-        request.method() !== 'GET' ||
-        !['document', 'stylesheet', 'image', 'font'].includes(
-          request.resourceType(),
-        )
-      ) {
-        await route.abort();
-        return;
-      }
-      try {
-        await route.fulfill(
-          await readResource(request.url(), controller.signal),
-        );
-      } catch (error) {
-        if (request.isNavigationRequest())
-          mainError =
-            error instanceof Error ? error.message : 'Navigation failed.';
-        await route.abort();
-      }
-    });
-    const page = await context.newPage();
-    const response = await page.goto(parsed.data.url, {
-      waitUntil: 'domcontentloaded',
-      timeout: 25_000,
-    });
-    if (mainError) throw new Error(mainError);
-    if (!response || response.status() >= 400)
-      throw new Error(
-        `Source returned HTTP ${response?.status() ?? 'unknown'}.`,
-      );
-    await validateUrl(page.url());
-    const text = (
-      await page.locator('body').innerText({ timeout: 5000 })
-    ).slice(0, 30_000);
-    const title = await page.title();
-    const screenshot = (
-      await page.screenshot({ type: 'jpeg', quality: 60, timeout: 5000 })
-    ).toString('base64');
-    return c.json({
-      url: page.url(),
-      title,
-      text,
-      screenshot: `data:image/jpeg;base64,${screenshot}`,
-    });
+    return c.json(await readPublicPage(parsed.data.url, controller.signal));
   } catch (error) {
     return c.json(
       {
-        error:
-          mainError ??
-          (error instanceof Error ? error.message : 'Browser failed.'),
+        error: error instanceof Error ? error.message : 'Browser failed.',
       },
       502,
     );
@@ -120,11 +54,7 @@ app.post('/browse', async (c) => {
     clearTimeout(deadline);
     c.req.raw.signal.removeEventListener('abort', abort);
     c.env.outgoing.off('close', disconnected);
-    try {
-      await browser?.close();
-    } finally {
-      busy = false;
-    }
+    busy = false;
   }
 });
 app.get('/health', (c) => c.json({ ok: true }));

@@ -8,6 +8,7 @@ import { Runner } from './runner.js';
 import { createApp } from './app.js';
 import { WorkspaceStore } from './workspace.js';
 import { Platform } from './platform.js';
+import { TelegramBot } from './telegram-bot.js';
 import type { PlatformConfig } from './platform-config.js';
 const host = process.env.HOST ?? '127.0.0.1';
 const port = Number(process.env.PORT ?? 4310);
@@ -50,10 +51,22 @@ const config: PlatformConfig = {
     .map((value) => value.trim())
     .filter(Boolean),
   slackDotId: process.env.SLACK_DOT_ID || undefined,
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || undefined,
+  telegramUserId: process.env.TELEGRAM_USER_ID || undefined,
+  telegramDotId: process.env.TELEGRAM_DOT_ID || undefined,
+  telegramGroupIds: (process.env.TELEGRAM_GROUP_IDS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean),
+  telegramGroupUserIds: (process.env.TELEGRAM_GROUP_USER_IDS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean),
   runtimeUrl: `http://${host === '::1' ? '[::1]' : '127.0.0.1'}:${port}/api/copilotkit`,
   ownerToken,
 };
 const platform = new Platform(store, workspace, config);
+const telegram = new TelegramBot(platform);
 const researchConfig = {
   mode: 'live' as const,
   apiKey: config.apiKey,
@@ -108,6 +121,7 @@ app.get('*', serveStatic({ path: './dist/client/index.html' }));
 const server = serve({ fetch: app.fetch, hostname: host, port }, (info) => {
   console.log(`OpenDots template listening on http://${host}:${info.port}`);
   runner.start();
+  telegram.start();
   void platform
     .start()
     .catch((error) =>
@@ -119,7 +133,10 @@ const server = serve({ fetch: app.fetch, hostname: host, port }, (info) => {
 });
 const shutdown = createShutdown({
   stopRunner: () => runner.stop(),
-  stopPlatform: () => platform.stop(),
+  stopPlatform: async () => {
+    await telegram.stop();
+    await platform.stop();
+  },
   closeServer: () =>
     new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),

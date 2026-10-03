@@ -100,6 +100,12 @@ https://github.com/user-attachments/assets/3c06cf71-39ed-4e2b-b846-5463b2722389
 
 _Connect, talk, mute, minimize, and return to chat. This is a silent screen capture of a real call, with waiting time trimmed and playback accelerated._
 
+### Telegram
+
+Chat with your Dot through a Telegram bot. Private chats accept only the configured owner. In explicitly allowed groups/supergroups, the bot responds to mentions, `/start@BotUsername`, and replies to its messages from allowed users. Group history is separate for each user and forum topic; private history is never reused in a group.
+
+This fork also replaces the public-page browser's Playwright dependency with Stagehand v4. See [Telegram setup](docs/SETUP.md#telegram) and [browser setup](docs/SETUP.md#browser) for configuration. Automated Telegram fixtures and local browser checks pass; a live Telegram connection and final Docker image export still need verification.
+
 ### Slack
 
 Mention a Dot through a managed Slack connection using Channels SDK, then continue in its thread. The integration follows [OpenTag](https://github.com/CopilotKit/OpenTag), with an explicit workspace/user allowlist and a selected specialist. See [Slack setup](docs/SETUP.md#slack) to connect your deployment.

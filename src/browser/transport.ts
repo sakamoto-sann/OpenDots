@@ -2,7 +2,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { validateUrl } from './security.js';
 // Browser networking is intercepted: each request is DNS-pinned to a validated
-// public IP. Redirects are rejected before Playwright sees the Location header.
+// public IP. Redirects are rejected before the browser sees the Location header.
 export async function readResource(
   input: string,
   signal?: AbortSignal,
