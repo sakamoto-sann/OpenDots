@@ -40,7 +40,7 @@ export async function validateUrl(
     throw new Error(
       'Only public HTTP(S) URLs without credentials are allowed.',
     );
-  if (url.port && !['80', '443'].includes(url.port))
+  if (url.port && url.port !== (url.protocol === 'https:' ? '443' : '80'))
     throw new Error('Only standard web ports are allowed.');
   const hostname = url.hostname.replace(/^\[|\]$/g, '');
   if (

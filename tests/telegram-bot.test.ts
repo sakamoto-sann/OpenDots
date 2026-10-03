@@ -44,10 +44,17 @@ function fixture(failDelivery = false) {
     message_thread_id?: number;
   }> = [];
   const offsets: Array<number | undefined> = [];
+  const uploads: string[] = [];
   let updates: object[] = [];
   const fetcher = vi.fn(
     async (input: string | URL | Request, init?: RequestInit) => {
       const method = String(input).split('/').at(-1);
+      if (String(input).includes('/file/botfixture-token/photos/test.png'))
+        return new Response(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+      if (method === 'sendDocument' && init?.body instanceof FormData) {
+        uploads.push(String(init.body.get('chat_id')));
+        return Response.json({ ok: true, result: { message_id: 100 } });
+      }
       const body = JSON.parse(String(init?.body));
       let result: unknown;
       if (method === 'getMe') result = { id: 321, username: 'OpenDotsBot' };
@@ -55,7 +62,9 @@ function fixture(failDelivery = false) {
         if (failDelivery) throw new Error('fixture-secret-provider-error');
         sent.push(body);
         result = { message_id: sent.length };
-      } else if (method === 'getUpdates') {
+      } else if (method === 'getFile')
+        result = { file_path: 'photos/test.png', file_size: 8 };
+      else if (method === 'getUpdates') {
         offsets.push(body.offset);
         if (updates.length) {
           result = updates;
@@ -68,7 +77,11 @@ function fixture(failDelivery = false) {
               { once: true },
             );
           });
-      } else throw new Error('Unexpected method.');
+      } else if (
+        ['answerCallbackQuery', 'editMessageReplyMarkup'].includes(method!)
+      )
+        result = true;
+      else throw new Error('Unexpected method.');
       return Response.json({ ok: true, result });
     },
   );
@@ -91,6 +104,7 @@ function fixture(failDelivery = false) {
     turn,
     sent,
     offsets,
+    uploads,
     start,
     message,
     updates: (value: object[]) => {
@@ -295,6 +309,65 @@ it('keeps OAuth conversation bindings separate from Intelligence bindings', asyn
     'telegram-thread',
     'Hello',
     expect.any(AbortSignal),
-    { opendotsSource: 'telegram' },
+    expect.objectContaining({ opendotsSource: 'telegram' }),
   );
+});
+
+it('authorizes review callbacks against the original chat owner and saves and delivers once', async () => {
+  const f = fixture();
+  const dot = f.workspace.dots()[0];
+  f.workspace.bindThread('review-thread', dot.id, 'Review');
+  const review = f.workspace.createTelegramReview('321:123', 'review-thread', {
+    title: 'Review fixture',
+    content: 'Approved body',
+    spaceId: dot.spaceId,
+  });
+  const callback = (update_id: number, sender = 123, chat = 123) => ({
+    update_id,
+    callback_query: {
+      id: String(update_id),
+      data: 'review:a:' + review,
+      from: { id: sender, is_bot: false },
+      message: { message_id: 55, chat: { id: chat, type: 'private' } },
+    },
+  });
+  f.updates([callback(1, 999), callback(2, 123, 999)]);
+  const bot = f.start();
+  await vi.waitFor(() => expect(f.workspace.telegramOffset('321')).toBe(3));
+  expect(f.workspace.pages.list(dot.spaceId)).toEqual([]);
+  expect(f.uploads).toEqual([]);
+  await bot.stop();
+  f.updates([callback(3), callback(4)]);
+  f.start();
+  await vi.waitFor(() => expect(f.workspace.telegramOffset('321')).toBe(5));
+  expect(f.workspace.pages.list(dot.spaceId)).toHaveLength(1);
+  expect(f.uploads).toEqual(['123']);
+  expect(f.turn).not.toHaveBeenCalled();
+});
+
+it('handles a photo with only a bot mention in an allowed group', async () => {
+  const f = fixture();
+  f.config.telegramBackend = 'codex';
+  f.config.telegramGroupIds = ['-100'];
+  const photo = {
+    text: undefined,
+    caption: '@OpenDotsBot',
+    caption_entities: [{ type: 'mention', offset: 0, length: 12 }],
+    entities: undefined,
+    photo: [{ file_id: 'fixture-photo', file_size: 8 }],
+  };
+  f.updates([
+    groupMessage(1, { ...photo, from: { id: 999, is_bot: false } }),
+    groupMessage(2, photo),
+  ]);
+  f.start();
+  await vi.waitFor(() => expect(f.workspace.telegramOffset('321')).toBe(3));
+  expect(f.turn).toHaveBeenCalledOnce();
+  expect(f.turn).toHaveBeenCalledWith(
+    'telegram-thread',
+    'この画像を確認して説明してください。',
+    expect.any(AbortSignal),
+    expect.objectContaining({ ownerPrivate: false }),
+  );
+  expect(f.workspace.telegramImages('telegram-thread')).toHaveLength(1);
 });

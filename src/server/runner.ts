@@ -1,4 +1,5 @@
 import { Store } from './store.js';
+import { ConversationBusyError } from './conversation-busy.js';
 import type { Result, Memory } from '../shared/types.js';
 import type { Claim } from './store.js';
 import { research, type Config } from './research.js';
@@ -78,10 +79,19 @@ export class Runner {
       controller.signal.throwIfAborted();
       this.store.finish(claim, result);
     } catch (error) {
-      this.store.fail(
-        claim,
-        error instanceof Error ? error.message : 'Unexpected research failure.',
-      );
+      if (error instanceof ConversationBusyError) {
+        this.store.release(
+          claim,
+          'Conversation is busy; queued for retry.',
+          Date.now() + 5000,
+        );
+      } else
+        this.store.fail(
+          claim,
+          error instanceof Error
+            ? error.message
+            : 'Unexpected research failure.',
+        );
     } finally {
       clearInterval(ownershipCheck);
       clearTimeout(timeout);

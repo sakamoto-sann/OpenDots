@@ -22,6 +22,10 @@ export class WorkspaceStore {
       CREATE TABLE IF NOT EXISTS thread_bindings(id TEXT PRIMARY KEY, dotId TEXT NOT NULL, ownerId TEXT NOT NULL, title TEXT NOT NULL, createdAt INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS telegram_threads(chatId TEXT PRIMARY KEY, threadId TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS telegram_local_turns(id INTEGER PRIMARY KEY AUTOINCREMENT, threadId TEXT NOT NULL, prompt TEXT NOT NULL, reply TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS telegram_images(id TEXT PRIMARY KEY, threadId TEXT NOT NULL, mime TEXT NOT NULL, bytes BLOB NOT NULL, createdAt INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS telegram_reviews(id TEXT PRIMARY KEY, scope TEXT NOT NULL, threadId TEXT NOT NULL, draft TEXT NOT NULL, status TEXT NOT NULL, createdAt INTEGER NOT NULL, pageId TEXT);
+      CREATE TABLE IF NOT EXISTS local_dot_skills(dotId TEXT NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL, files TEXT NOT NULL, PRIMARY KEY(dotId,name));
+      CREATE TABLE IF NOT EXISTS local_runtime_threads(threadId TEXT PRIMARY KEY, backend TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS telegram_state(botId TEXT PRIMARY KEY, nextOffset INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS task_threads(taskId TEXT PRIMARY KEY, threadId TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS calls(id TEXT PRIMARY KEY, threadId TEXT NOT NULL, startedAt INTEGER NOT NULL, endedAt INTEGER, status TEXT NOT NULL, transcript TEXT NOT NULL, error TEXT);
@@ -262,6 +266,149 @@ export class WorkspaceStore {
         value.learningContainerId ?? null,
       );
     return value;
+  }
+  localSkills(dotId: string) {
+    if (!this.dot(dotId)) throw new Error('Dot unavailable');
+    return this.db
+      .prepare(
+        'SELECT name,description FROM local_dot_skills WHERE dotId=? ORDER BY name LIMIT 50',
+      )
+      .all(dotId) as Array<{ name: string; description: string }>;
+  }
+  saveLocalSkill(
+    dotId: string,
+    name: string,
+    description: string,
+    files: Record<string, string>,
+  ) {
+    if (!this.dot(dotId)) throw new Error('Dot unavailable');
+    if (JSON.stringify(files).length > 80000)
+      throw new Error('Skill size limit');
+    this.db
+      .prepare(
+        'INSERT INTO local_dot_skills VALUES (?,?,?,?) ON CONFLICT(dotId,name) DO UPDATE SET description=excluded.description,files=excluded.files',
+      )
+      .run(dotId, name, description, JSON.stringify(files));
+    return { name, description };
+  }
+  readLocalSkill(dotId: string, name: string, path = 'SKILL.md') {
+    if (!this.dot(dotId)) throw new Error('Dot unavailable');
+    const row = this.db
+      .prepare('SELECT files FROM local_dot_skills WHERE dotId=? AND name=?')
+      .get(dotId, name) as { files: string } | undefined;
+    const value = row ? JSON.parse(row.files)[path] : undefined;
+    if (typeof value !== 'string')
+      throw new Error('Local skill file unavailable');
+    return { name, path, content: value };
+  }
+  localRuntime(threadId: string, backend?: string) {
+    this.requireThread(threadId);
+    if (backend)
+      this.db
+        .prepare(
+          'INSERT INTO local_runtime_threads VALUES (?,?) ON CONFLICT(threadId) DO UPDATE SET backend=excluded.backend',
+        )
+        .run(threadId, backend);
+    return (
+      this.db
+        .prepare('SELECT backend FROM local_runtime_threads WHERE threadId=?')
+        .get(threadId) as { backend: string } | undefined
+    )?.backend;
+  }
+  saveTelegramImage(threadId: string, mime: string, bytes: Uint8Array) {
+    this.requireThread(threadId);
+    if (!['image/png', 'image/jpeg'].includes(mime) || bytes.length > 5000000)
+      throw new Error('Image limit');
+    this.db
+      .prepare('INSERT INTO telegram_images VALUES (?,?,?,?,?)')
+      .run(randomUUID(), threadId, mime, bytes, Date.now());
+    this.db
+      .prepare(
+        'DELETE FROM telegram_images WHERE threadId=? AND id NOT IN (SELECT id FROM telegram_images WHERE threadId=? ORDER BY createdAt DESC,rowid DESC LIMIT 4)',
+      )
+      .run(threadId, threadId);
+  }
+  telegramImages(threadId: string) {
+    this.requireThread(threadId);
+    return this.db
+      .prepare(
+        'SELECT mime,bytes FROM telegram_images WHERE threadId=? ORDER BY createdAt,rowid',
+      )
+      .all(threadId) as unknown as Array<{
+      mime: 'image/png' | 'image/jpeg';
+      bytes: Uint8Array;
+    }>;
+  }
+  pendingTelegramReview(threadId: string) {
+    this.requireThread(threadId);
+    return !!this.db
+      .prepare(
+        "SELECT id FROM telegram_reviews WHERE threadId=? AND status='pending' AND createdAt>?",
+      )
+      .get(threadId, Date.now() - 86400000);
+  }
+  createTelegramReview(scope: string, threadId: string, draft: unknown) {
+    this.requireThread(threadId);
+    if (this.pendingTelegramReview(threadId))
+      throw new Error('Await the pending review');
+    const id = randomUUID();
+    this.db
+      .prepare('INSERT INTO telegram_reviews VALUES (?,?,?,?,?,?,NULL)')
+      .run(id, scope, threadId, JSON.stringify(draft), 'pending', Date.now());
+    return id;
+  }
+  resolveTelegramReview(id: string, scope: string, approve: boolean) {
+    const row = this.db
+      .prepare('SELECT * FROM telegram_reviews WHERE id=? AND scope=?')
+      .get(id, scope) as
+      | {
+          threadId: string;
+          draft: string;
+          status: string;
+          createdAt: number;
+          pageId: string | null;
+        }
+      | undefined;
+    if (
+      !row ||
+      row.status !== 'pending' ||
+      Date.now() - row.createdAt > 86400000
+    )
+      throw new Error('Review expired or unavailable');
+    const thread = this.requireThread(row.threadId),
+      dot = this.dot(thread.dotId);
+    if (!dot) throw new Error('Dot unavailable');
+    const draft = JSON.parse(row.draft) as {
+      spaceId: string;
+      title: string;
+      content: string;
+    };
+    if (approve && !this.canAccessSpace(dot.id, draft.spaceId))
+      throw new Error('Space access denied');
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const changed = this.db
+        .prepare(
+          "UPDATE telegram_reviews SET status=? WHERE id=? AND scope=? AND status='pending'",
+        )
+        .run(approve ? 'approved' : 'declined', id, scope).changes;
+      if (changed !== 1) throw new Error('Review already resolved');
+      const page = approve
+        ? this.pages.create(draft.spaceId, {
+            title: draft.title,
+            content: draft.content,
+          })
+        : undefined;
+      if (page)
+        this.db
+          .prepare('UPDATE telegram_reviews SET pageId=? WHERE id=?')
+          .run(page.id, id);
+      this.db.exec('COMMIT');
+      return page;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
   localTelegramHistory(
     threadId: string,

@@ -67,6 +67,7 @@ export class ComputerService {
     body: unknown | undefined,
     signal?: AbortSignal,
     dotId?: string,
+    actor: 'agent' | 'owner' = 'agent',
   ): Promise<unknown> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.deadlineMs);
@@ -80,6 +81,7 @@ export class ComputerService {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
           ...(dotId ? { 'x-openbot-bot-id': dotId } : {}),
+          'x-opendots-actor': actor,
         },
         body: body === undefined ? undefined : JSON.stringify(body),
         redirect: 'error',
@@ -353,6 +355,7 @@ export class ComputerService {
           ['read', 'screenshot'].includes(action) ? undefined : parsed,
           activeSignal,
           id,
+          actor,
         );
         this.allowed(id, kind, actor);
         if (action === 'exec' && result && typeof result === 'object') {

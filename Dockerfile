@@ -27,3 +27,20 @@ COPY --from=build /app/dist/server ./dist/server
 USER node
 EXPOSE 4311
 CMD ["node", "dist/server/browser/index.js"]
+
+FROM node:24-bookworm-slim AS command-runner
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY deployment/computers/command-runner.c /tmp/command-runner.c
+RUN gcc -O2 -Wall -Wextra -Werror /tmp/command-runner.c -o /command-runner
+
+# Persistent Stagehand computer; no model or host credentials are installed here.
+FROM browser AS computer
+USER root
+RUN mkdir -p /workspace /profiles && chown node:node /workspace /profiles
+ENV PORT=4100 OPENDOTS_COMPUTER_CONTAINER=1
+COPY --from=command-runner /command-runner /app/command-runner
+COPY deployment/computers/stagehand-entrypoint.sh /app/stagehand-entrypoint.sh
+USER node
+EXPOSE 4100
+ENTRYPOINT ["/bin/sh", "/app/stagehand-entrypoint.sh"]
