@@ -204,9 +204,9 @@ export class Store {
         );
       const task = this.db
         .prepare(
-          "SELECT * FROM tasks WHERE status='queued' OR (status='completed' AND nextRunAt IS NOT NULL AND nextRunAt<=?) ORDER BY createdAt LIMIT 1",
+          "SELECT * FROM tasks WHERE (status='queued' AND (nextRunAt IS NULL OR nextRunAt<=?)) OR (status='completed' AND nextRunAt IS NOT NULL AND nextRunAt<=?) ORDER BY createdAt LIMIT 1",
         )
-        .get(now) as unknown as Task | undefined;
+        .get(now, now) as unknown as Task | undefined;
       if (!task) return null;
       const lease = randomUUID();
       this.db
@@ -255,9 +255,14 @@ export class Store {
       return true;
     });
   }
-  release(claim: Claim, reason: string) {
+  release(claim: Claim, reason: string, retryAt?: number) {
     this.transaction(() => {
-      if (this.owns(claim)) this.invalidate(claim, 'queued', reason);
+      if (!this.owns(claim)) return;
+      this.invalidate(claim, 'queued', reason);
+      if (retryAt !== undefined)
+        this.db
+          .prepare('UPDATE tasks SET nextRunAt=? WHERE id=?')
+          .run(retryAt, claim.id);
     });
   }
   fail(claim: Claim, error: string) {

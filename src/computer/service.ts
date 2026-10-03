@@ -250,7 +250,18 @@ export async function startComputer() {
             throw new Error('File limit');
           return reply(200, { contents: await readFile(path, 'utf8') });
         }
-        await writeFile(path, String(parsed.contents), {
+        const contents = String(parsed.contents);
+        let existingSize = 0;
+        if (parsed.append) {
+          try {
+            existingSize = (await stat(path)).size;
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+          }
+        }
+        if (existingSize + Buffer.byteLength(contents, 'utf8') > 100000)
+          throw new Error('File limit');
+        await writeFile(path, contents, {
           flag: parsed.append ? 'a' : 'w',
           mode: 0o600,
         });

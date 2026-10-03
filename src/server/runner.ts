@@ -6,7 +6,6 @@ import { research, type Config } from './research.js';
 export class Runner {
   private timer?: ReturnType<typeof setInterval>;
   private active = new Map<string, AbortController>();
-  private retryAt = 0;
   constructor(
     private store: Store,
     private config: Config,
@@ -43,7 +42,7 @@ export class Runner {
       controller.abort(new Error('Run stopped because settings changed.'));
   }
   async tick() {
-    if (this.active.size || Date.now() < this.retryAt) return;
+    if (this.active.size) return;
     const claim = this.store.claim();
     if (!claim) return;
     const controller = new AbortController();
@@ -81,8 +80,11 @@ export class Runner {
       this.store.finish(claim, result);
     } catch (error) {
       if (error instanceof ConversationBusyError) {
-        this.store.release(claim, 'Conversation is busy; queued for retry.');
-        this.retryAt = Date.now() + 5000;
+        this.store.release(
+          claim,
+          'Conversation is busy; queued for retry.',
+          Date.now() + 5000,
+        );
       } else
         this.store.fail(
           claim,
