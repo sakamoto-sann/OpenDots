@@ -1,6 +1,6 @@
 # A computer for each Dot
 
-OpenDots connects each specialist to its own container through [OpenBot](https://github.com/CopilotKit/OpenBot)'s computer service and supervisor. A Dot's ID determines its computer and persistent volumes. Files and browser profiles survive stop/start; they are separate from Spaces pages and CopilotKit conversation history.
+OpenDots connects each specialist to its own container through a Stagehand v4 computer service and a pinned [OpenBot](https://github.com/CopilotKit/OpenBot) supervisor. A Dot's ID determines its computer and persistent volumes. Files and browser profiles survive stop/start; they are separate from Spaces pages and CopilotKit conversation history.
 
 The app exposes selected computer tools to the same Dot agent used by web chat, Slack, scheduled work, and voice's compute delegation. Browser, workspace-file, and shell permissions are saved per Dot and checked by the server. They start disabled. No action falls back to your host's shell or files when the computer service is unavailable.
 
@@ -9,13 +9,13 @@ The app exposes selected computer tools to the same Dot agent used by web chat, 
 Use a working Docker Engine with Compose v2 and BuildKit support for additional build contexts. Keep the application on Node.js 24 as described in [Setup](SETUP.md). Add two different random secrets of at least 24 characters to `.env` and set:
 
 ```dotenv
-COMPUTER_SUPERVISOR_URL=http://127.0.0.1:4312
-COMPUTER_SUPERVISOR_TOKEN=REPLACE_WITH_A_RANDOM_SECRET
-COMPUTER_TOKEN=REPLACE_WITH_A_DIFFERENT_RANDOM_SECRET
+COMPUTER_SUPERVISOR_URL=http://127.0.0.1:4314
+COMPUTER_SUPERVISOR_TOKEN=
+COMPUTER_TOKEN=
 COMPUTER_NAMESPACE=opendots
 ```
 
-Do not use the placeholder values. The supervisor token authorizes lifecycle requests. The computer token is a master used to derive a different credential for each Dot; the master stays in the application and supervisor.
+Supply both secret values privately. The supervisor token authorizes lifecycle requests. The computer token is a master used to derive a different credential for each Dot; the master stays in the application and supervisor.
 
 Build both images before starting the supervisor:
 
@@ -25,7 +25,7 @@ docker compose -f compose.computers.yml up -d computer-supervisor
 npm run dev
 ```
 
-The computer-image service is a build target, not a shared computer to run. The supervisor creates a container when you start a Dot's computer. In this local arrangement, each computer publishes a dynamic loopback port for the app to reach. Port 4312 is the loopback supervisor endpoint. The local control network uses a normal bridge so Docker can publish that port. The container-app overlay makes the control network internal and removes the host port; the app then connects through service DNS.
+The computer-image service is a build target, not a shared computer to run. The supervisor creates a container when you start a Dot's computer. In this local arrangement, each computer publishes a dynamic loopback port for the app to reach. Port 4314 is the loopback supervisor endpoint. The local control network uses a normal bridge so Docker can publish that port. The container-app overlay makes the control network internal and removes the host port; the app then connects through service DNS.
 
 Open a Dot's **Computer** panel, enable computer access and the capabilities you want, then choose **Start**. Check its status, navigate to a page, and refresh its screen. Only grant shell access when that Dot needs to run commands.
 
@@ -52,7 +52,7 @@ Stop retains files and browser profiles. The app does not expose a destructive r
 
 Revoking a capability cancels the application's active request and prevents subsequent actions. Cancellation cannot undo completed side effects, and an upstream browser operation may finish after the request is cancelled. Stop the computer when you need to end all activity in its container. Activity retains the latest 1,000 completed records per Dot, plus pending requests.
 
-The template uses standard Docker container isolation; containers share the host kernel. Shell access permits programs and network access inside the container and can read that Dot's own browser profile. Run this on infrastructure appropriate for that trust level. `COMPUTER_RUNTIME=runsc` can select an already-installed gVisor runtime; the template does not install it or claim stronger isolation by default. It does not configure a restrictive network-egress policy.
+The template uses standard Docker container isolation; containers share the host kernel. Shell access permits programs and network access inside the container and can read that Dot's own browser profile. Run this on infrastructure appropriate for that trust level. `COMPUTER_RUNTIME=runsc` can select an already-installed gVisor runtime; the template does not install it or claim stronger isolation by default. Browser HTTP(S) connections use a DNS-pinned proxy that blocks private addresses, including redirects and subresources. Shell programs have container network access; this is not a container-wide egress firewall.
 
 ## Verify and troubleshoot
 

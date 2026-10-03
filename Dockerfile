@@ -27,3 +27,13 @@ COPY --from=build /app/dist/server ./dist/server
 USER node
 EXPOSE 4311
 CMD ["node", "dist/server/browser/index.js"]
+
+# Persistent Stagehand computer; no model or host credentials are installed here.
+FROM browser AS computer
+USER root
+RUN mkdir -p /workspace /profiles && chown node:node /workspace /profiles
+ENV PORT=4100 OPENDOTS_COMPUTER_CONTAINER=1
+COPY deployment/computers/stagehand-entrypoint.sh /app/stagehand-entrypoint.sh
+USER node
+EXPOSE 4100
+ENTRYPOINT ["/bin/sh", "/app/stagehand-entrypoint.sh"]

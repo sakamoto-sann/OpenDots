@@ -70,11 +70,10 @@ const config: PlatformConfig = {
   ownerToken,
 };
 const platform = new Platform(store, workspace, config);
-const telegram = new TelegramBot(
-  config.telegramBackend === 'codex'
-    ? new CodexTelegramPlatform(platform)
-    : platform,
-);
+const codexPlatform = new CodexTelegramPlatform(platform);
+const telegramPlatform =
+  config.telegramBackend === 'codex' ? codexPlatform : platform;
+const telegram = new TelegramBot(telegramPlatform);
 const researchConfig = {
   mode: 'live' as const,
   apiKey: config.apiKey,
@@ -95,7 +94,12 @@ const runner = new Runner(
         'This legacy task has no Intelligence conversation. Create a new scheduled task from a conversation.',
       );
     progress('Running this task in its Intelligence conversation.');
-    const text = await platform.turn(threadId, claim.prompt, signal);
+    const backend = workspace.localRuntime(threadId);
+    const text = await (backend === 'codex' ? codexPlatform : platform).turn(
+      threadId,
+      claim.prompt,
+      signal,
+    );
     return { text, sources: [], sample: false };
   },
 );

@@ -4,10 +4,10 @@
 services:
   computer-image:
     profiles: [build-computers]
-    image: opendots-computer:b6932d3
+    image: opendots-computer:stagehand-v4
     build:
-      context: https://github.com/CopilotKit/OpenBot.git#b6932d31a8d6e7896c15139dfc27a6c6911deb27
-      dockerfile: agent-computer/Dockerfile
+      context: .
+      target: computer
     command: ['true']
   computer-supervisor:
     image: opendots-supervisor:b6932d3-dot-auth
@@ -17,13 +17,13 @@ services:
       additional_contexts:
         openbot: https://github.com/CopilotKit/OpenBot.git#b6932d31a8d6e7896c15139dfc27a6c6911deb27
     ports:
-      - '127.0.0.1:4312:4300'
+      - '127.0.0.1:${COMPUTER_SUPERVISOR_PORT:-4314}:4300'
     environment:
       PORT: '4300'
       SUPERVISOR_TOKEN: ${COMPUTER_SUPERVISOR_TOKEN:?Set COMPUTER_SUPERVISOR_TOKEN in .env}
       COMPUTER_TOKEN: ${COMPUTER_TOKEN:?Set COMPUTER_TOKEN in .env}
       COMPUTER_NAMESPACE: ${COMPUTER_NAMESPACE:-opendots}
-      COMPUTER_IMAGE: opendots-computer:b6932d3
+      COMPUTER_IMAGE: opendots-computer:stagehand-v4
       COMPUTER_BROWSER_MODE: headless
       COMPUTER_NETWORK: ''
       COMPUTER_MEMORY_BYTES: ${COMPUTER_MEMORY_BYTES:-2147483648}

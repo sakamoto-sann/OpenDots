@@ -68,7 +68,7 @@ Run `npm run test:browser` to verify rendering and network restrictions with Sta
 
 ## Persistent Dot computers
 
-For a separate browser, persistent files, and optional shell for each specialist, follow [Computer setup](COMPUTERS.md). This uses pinned OpenBot computer/supervisor services and per-Dot permissions. Parallel research tools remain available alongside configured computer tools. With the browser provider selected, Dots use their computer tools in place of the read-only public-page tool; enable each Dot's required capabilities before use.
+For a separate browser, persistent files, and optional shell for each specialist, follow [Computer setup](COMPUTERS.md). This uses pinned OpenBot computer/supervisor services and per-Dot permissions. Parallel research tools remain available alongside configured computer tools. With the browser provider selected, Dots use their computer for public-page reading and DuckDuckGo search, as well as interactive work; enable each Dot's required capabilities before use.
 
 ## Slack
 
@@ -122,13 +122,13 @@ TELEGRAM_USER_ID=REPLACE_WITH_NUMERIC_USER_ID
 
 `TELEGRAM_DOT_ID` selects an existing Dot; if omitted, the initial Dot is used. Configure `INTELLIGENCE_API_KEY`, `OPENAI_API_KEY`, and `OPENAI_MODEL` as described above. Restart the server, then send `/start` and a text message to the bot in a private chat. The bridge uses long polling, so the server needs outbound HTTPS access to `api.telegram.org`; no public webhook or inbound port is needed. Run only one OpenDots instance with this bot token, and remove any existing webhook before enabling polling.
 
-Private text is accepted only from `TELEGRAM_USER_ID`. The Bot API numeric sender and chat IDs are checked; display names and usernames are ignored. The chat keeps one conversation with the selected Dot across restarts. If you change `TELEGRAM_DOT_ID` after first use, use a new bot or clear its saved mapping before messaging; the existing conversation is tied to its original Dot. Replies are plain text, split to fit Telegram's message limit. Telegram calls, files, buttons, and approval cards are not supported by this bridge.
+Private text is accepted only from `TELEGRAM_USER_ID`. The Bot API numeric sender and chat IDs are checked; display names and usernames are ignored. The chat keeps one conversation with the selected Dot across restarts. If you change `TELEGRAM_DOT_ID` after first use, use a new bot or clear its saved mapping before messaging; the existing conversation is tied to its original Dot. Replies are plain text, split to fit Telegram's message limit. With the Codex backend, PNG/JPEG photos are downloaded with a 5 MB limit and the last four are kept per conversation. Screenshots are sent as photos; pages and text workspace files can be sent as documents. Review drafts have chat/user-bound approve and decline buttons.
 
 The bot token stays on the server. A live end-to-end check requires your bot token, allowed user ID, model credentials, and a running server; local code checks do not prove Telegram delivery.
 
 ### ChatGPT OAuth without CopilotKit Intelligence
 
-For Telegram text conversations, use the official Codex CLI's ChatGPT browser login:
+For Telegram conversations and tools, use the official Codex CLI's ChatGPT browser login:
 
 ```sh
 codex login
@@ -137,9 +137,9 @@ codex login status
 
 Set `TELEGRAM_BACKEND=codex` and optionally `TELEGRAM_CODEX_PATH` (an absolute CLI path) or `TELEGRAM_CODEX_MODEL`. Start OpenDots as the same OS user that logged in to Codex. This Telegram path needs neither `INTELLIGENCE_API_KEY` nor `OPENAI_API_KEY`. It reuses Codex's managed OAuth session; never copy an access token into `.env` or the repository. See [official authentication](https://developers.openai.com/codex/auth) and [non-interactive execution](https://developers.openai.com/codex/noninteractive). It consumes the logged-in account's Codex entitlement and is intended for a private, explicitly allowlisted bot.
 
-The CLI runs in a disposable directory with user config, external connections, shell, browser, subagents, image tools and hooks disabled. It receives only Dot role instructions and this chat's recent text history. Telegram/vault/API secrets are excluded from its environment. Conversation turns are saved in SQLite only after successful completion. Each group/topic/user still has its own history. Switching between `intelligence` and `codex` uses separate conversation bindings and does not copy cloud conversations.
+The CLI runs in a disposable directory with user config, external connections, shell, browser, subagents, image tools and hooks disabled. It receives Dot instructions, this chat's recent history and images, and a per-turn MCP connection exposing only authorized OpenDots tools. Native CLI host tools remain disabled. Telegram/vault/API secrets are excluded from its environment. Conversation turns are saved in SQLite only after successful completion. Each group/topic/user still has its own history. Switching between `intelligence` and `codex` uses separate conversation bindings and does not copy cloud conversations.
 
-This mode provides **Telegram text chat**, not OpenDots page/computer tools or web approval cards. The existing web chat, Slack, calls and Intelligence learning still require their original services. The OAuth CLI and login must exist on the host; the stock Docker app image does not include or authenticate Codex. Use native Node.js to run this mode. Local models remain available through the original OpenAI-compatible model configuration; this OAuth backend does not select a local model.
+This mode shares page, research and Computer tools with the original agent. It also provides conversation-scoped tasks, local memories and reusable local skills. Skills are stored as data, do not execute host scripts, and saving requires an explicit owner request in private chat. Intelligence automatic cloud learning, existing web chat, Slack transport and realtime voice retain their original service requirements. Telegram Bot API does not provide incoming voice calls. The OAuth CLI and login must exist on the host; the stock Docker app image does not include or authenticate Codex. Use native Node.js to run this mode. Local models remain available through the original OpenAI-compatible model configuration; this OAuth backend does not select a local model.
 
 ### Groups and forum topics
 
@@ -238,3 +238,11 @@ npm run build
 ```
 
 Automated tests use service fixtures. Live model, Intelligence, Slack, and voice verification requires your own configured services.
+
+### Telegram Computer controls
+
+Start the Computer services, enable this Dot's browser/files/shell permissions, then send `/computer start` in the owner private chat. `/computer stop` and `/computer status` manage lifecycle. `/screenshot` sends its screen. Use `/computer take` before owner input: `/click 640 400`, `/type text`, `/key Enter`, `/scroll 500`. `/computer release` returns control; the agent must obtain a new snapshot. Group members cannot use owner controls or save skills.
+
+Ask in ordinary language to create/read/edit a page, research a topic, run an authorized workspace command, schedule a recurring task, send a page/file, or save a reusable skill. Ask for review before saving to receive approval buttons; pending reviews block page writes until approved/declined and expire after 24 hours. Task results remain in the conversation task ledger and can be queried in chat.
+
+Photo input supports PNG/JPEG; PDF, audio and video input are not decoded by this bridge. Browser access blocks private network addresses. Shell runs inside the Dot container and has its own network access.
