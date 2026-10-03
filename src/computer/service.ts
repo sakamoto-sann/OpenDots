@@ -284,6 +284,13 @@ export async function startComputer() {
               LANG: 'C.UTF-8',
             },
           });
+          const stdoutPipe = child.stdout,
+            stderrPipe = child.stderr;
+          if (!stdoutPipe || !stderrPipe) {
+            retire();
+            reject(new Error('Command output pipes unavailable'));
+            return;
+          }
           const kill = () => {
             try {
               if (child.pid) process.kill(-child.pid, 'SIGKILL');
@@ -297,13 +304,13 @@ export async function startComputer() {
             );
             kill();
             retire();
-            child.stdout.destroy();
-            child.stderr.destroy();
+            stdoutPipe.destroy();
+            stderrPipe.destroy();
             reject(failure);
           };
           const timeout = setTimeout(fail, Number(parsed.timeoutMs));
-          child.stdout.setEncoding('utf8');
-          child.stderr.setEncoding('utf8');
+          stdoutPipe.setEncoding('utf8');
+          stderrPipe.setEncoding('utf8');
           const statusPipe = child.stdio[3] as Readable;
           statusPipe.setEncoding('utf8');
           statusPipe.on('data', (value: string) => {
@@ -317,8 +324,8 @@ export async function startComputer() {
             else if (error) stderr += chunk;
             else stdout += chunk;
           };
-          child.stdout.on('data', (chunk) => receive(chunk, false));
-          child.stderr.on('data', (chunk) => receive(chunk, true));
+          stdoutPipe.on('data', (chunk) => receive(chunk, false));
+          stderrPipe.on('data', (chunk) => receive(chunk, true));
           child.once('error', fail);
           req.once('aborted', fail);
           res.once('close', () => {
