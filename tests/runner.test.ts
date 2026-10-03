@@ -125,10 +125,14 @@ it('requeues a busy conversation and preserves the recurring schedule for retry'
 });
 
 it('runs unrelated work while an older busy task waits for retry', async () => {
+  vi.useFakeTimers();
   const store = new Store(':memory:');
   const first = store.createTask('Busy');
+  vi.setSystemTime(Date.now() + 1);
   const second = store.createTask('Available');
+  const attempts: string[] = [];
   const runner = new Runner(store, config, async (claim) => {
+    attempts.push(claim.id);
     if (claim.id === first.id) throw new ConversationBusyError();
     return { text: 'Completed', sources: [], sample: false };
   });
@@ -136,10 +140,12 @@ it('runs unrelated work while an older busy task waits for retry', async () => {
     await runner.tick();
     await runner.tick();
     expect(store.detail(first.id)?.task.status).toBe('queued');
+    expect(attempts).toEqual([first.id, second.id]);
     expect(store.detail(second.id)?.task.status).toBe('completed');
     expect(store.claim()).toBeNull();
   } finally {
     runner.stop();
     store.close();
+    vi.useRealTimers();
   }
 });

@@ -10,6 +10,7 @@ import { timingSafeEqual, randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import {
   mkdir,
+  unlink,
   readFile,
   writeFile,
   readdir,
@@ -43,6 +44,15 @@ export async function startComputer() {
   const root = '/workspace';
   await mkdir(root, { recursive: true });
   await mkdir('/profiles', { recursive: true });
+  // PID 1 starts in a fresh namespace; the previous Chromium cannot still run.
+  // Persisted profiles retain stale singleton links across container replacement.
+  for (const name of ['SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
+    try {
+      await unlink(resolve('/profiles', name));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
   await mkdir('/workspace/downloads', { recursive: true });
   const proxy = await publicProxy();
   const manifest = JSON.parse(
