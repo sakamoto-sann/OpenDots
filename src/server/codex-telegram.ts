@@ -42,6 +42,11 @@ export class CodexTelegramPlatform implements TelegramPlatform {
     const dot = this.workspace.dot(thread.dotId);
     if (!dot || this.store.settings().paused)
       throw new Error('OpenDots is paused or this Dot is unavailable.');
+    if (
+      metadata?.background === true &&
+      (!dot.researchAllowed || !this.store.settings().researchAllowed)
+    )
+      throw new Error('Research disabled');
     if (this.busy.has(threadId))
       throw new Error('This conversation is busy. Retry shortly.');
     this.busy.add(threadId);

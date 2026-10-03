@@ -66,4 +66,4 @@ Automated tests use controlled service fixtures for policy, request, and lifecyc
 
 ### Upgrade the local supervisor port
 
-This fork defaults to port 4314. Existing installations using port 4312 must set `COMPUTER_SUPERVISOR_PORT=4312` to retain it, or update `COMPUTER_SUPERVISOR_URL` to `http://127.0.0.1:4314` before restarting services. Shell timeout, cancellation or unexpected surviving descendants retire and restart the Computer container to terminate its entire process namespace. Workspace and profile volumes are retained; take a new browser snapshot afterward.
+This fork defaults to port 4314. Existing installations using port 4312 must set `COMPUTER_SUPERVISOR_PORT=4312` to retain it, or update `COMPUTER_SUPERVISOR_URL` to `http://127.0.0.1:4314` before restarting services. Shell timeout or cancellation retires and restarts the Computer container to terminate its entire process namespace. Detached command descendants are terminated by a per-command Linux subreaper. Persistent background daemons are not supported. Workspace and profile volumes are retained; take a new browser snapshot afterward.

@@ -255,7 +255,6 @@ export async function startComputer() {
         return reply(200, { written: true });
       }
       if (action === 'exec') {
-        const before = new Set(await readdir('/proc'));
         const retire = () => {
           if (retiring) return;
           retiring = true;
@@ -272,7 +271,7 @@ export async function startComputer() {
             stderr = '',
             size = 0,
             failure: Error | undefined;
-          const child = spawn('/bin/sh', ['-c', String(parsed.command)], {
+          const child = spawn('/app/command-runner', [String(parsed.command)], {
             cwd: root,
             detached: true,
             stdio: ['ignore', 'pipe', 'pipe'],
@@ -315,23 +314,10 @@ export async function startComputer() {
           res.once('close', () => {
             if (!res.writableEnded) fail();
           });
-          child.once('close', async (code) => {
+          child.once('close', (code) => {
             clearTimeout(timeout);
             kill();
-            try {
-              const after = await readdir('/proc');
-              if (
-                after.some(
-                  (pid) =>
-                    /^\d+$/.test(pid) &&
-                    !before.has(pid) &&
-                    pid !== String(child.pid),
-                )
-              ) {
-                fail();
-                return;
-              }
-            } catch {
+            if (code === 125) {
               fail();
               return;
             }
