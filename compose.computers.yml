@@ -11,7 +11,7 @@ services:
     command: ['true']
     entrypoint: []
   computer-supervisor:
-    image: opendots-supervisor:b6932d3-dot-auth
+    image: opendots-supervisor:b6932d3-dot-auth-node
     build:
       context: .
       dockerfile: deployment/computers/supervisor.Dockerfile
