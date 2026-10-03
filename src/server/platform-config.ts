@@ -20,6 +20,9 @@ export interface PlatformConfig extends WebConfig {
   slackTeam?: string;
   slackUsers: string[];
   slackDotId?: string;
+  telegramBackend?: 'intelligence' | 'codex';
+  telegramCodexPath?: string;
+  telegramCodexModel?: string;
   telegramBotToken?: string;
   telegramUserId?: string;
   telegramDotId?: string;
@@ -58,4 +61,10 @@ export function setupStatus(
     slack,
     missing,
   };
+}
+
+export function telegramBackend(value?: string): 'intelligence' | 'codex' {
+  if (!value || value === 'intelligence') return 'intelligence';
+  if (value === 'codex') return 'codex';
+  throw new Error('TELEGRAM_BACKEND must be intelligence or codex.');
 }

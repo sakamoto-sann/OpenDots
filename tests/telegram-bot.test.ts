@@ -276,3 +276,25 @@ it('respects pause in addressed group messages without starting a conversation',
     message_thread_id: 7,
   });
 });
+
+it('keeps OAuth conversation bindings separate from Intelligence bindings', async () => {
+  const f = fixture();
+  const cloud = f.workspace.bindThread(
+    'existing-cloud',
+    f.workspace.dots()[0].id,
+    'Cloud',
+  );
+  f.workspace.bindTelegramThread('321:123', cloud.id, cloud.dotId);
+  f.config.telegramBackend = 'codex';
+  f.updates([f.message(1)]);
+  f.start();
+  await vi.waitFor(() => expect(f.workspace.telegramOffset('321')).toBe(2));
+  expect(f.workspace.telegramThread('321:123')).toBe('existing-cloud');
+  expect(f.workspace.telegramThread('codex:321:123')).toBe('telegram-thread');
+  expect(f.turn).toHaveBeenCalledWith(
+    'telegram-thread',
+    'Hello',
+    expect.any(AbortSignal),
+    { opendotsSource: 'telegram' },
+  );
+});

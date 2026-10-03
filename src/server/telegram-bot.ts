@@ -20,11 +20,16 @@ type Update = {
   };
 };
 
+export type TelegramPlatform = Pick<
+  Platform,
+  'store' | 'workspace' | 'config' | 'createConversation' | 'turn'
+>;
+
 /** An allowlisted Telegram private/group-chat bridge using Bot API long polling. */
 export class TelegramBot {
   private controller?: AbortController;
   private running?: Promise<void>;
-  constructor(private readonly platform: Platform) {}
+  constructor(private readonly platform: TelegramPlatform) {}
 
   start() {
     const {
@@ -197,9 +202,13 @@ export class TelegramBot {
     )
       return;
     if (!text.trim()) return;
-    const conversationKey = group
-      ? `${botId}:${chatId}:${topicId ?? 0}:${senderId}`
-      : `${botId}:${chatId}`;
+    const prefix =
+      this.platform.config.telegramBackend === 'codex' ? 'codex:' : '';
+    const conversationKey =
+      prefix +
+      (group
+        ? `${botId}:${chatId}:${topicId ?? 0}:${senderId}`
+        : `${botId}:${chatId}`);
     const send = (reply: string) =>
       this.send(
         token,

@@ -126,6 +126,21 @@ Private text is accepted only from `TELEGRAM_USER_ID`. The Bot API numeric sende
 
 The bot token stays on the server. A live end-to-end check requires your bot token, allowed user ID, model credentials, and a running server; local code checks do not prove Telegram delivery.
 
+### ChatGPT OAuth without CopilotKit Intelligence
+
+For Telegram text conversations, use the official Codex CLI's ChatGPT browser login:
+
+```sh
+codex login
+codex login status
+```
+
+Set `TELEGRAM_BACKEND=codex` and optionally `TELEGRAM_CODEX_PATH` (an absolute CLI path) or `TELEGRAM_CODEX_MODEL`. Start OpenDots as the same OS user that logged in to Codex. This Telegram path needs neither `INTELLIGENCE_API_KEY` nor `OPENAI_API_KEY`. It reuses Codex's managed OAuth session; never copy an access token into `.env` or the repository. See [official authentication](https://developers.openai.com/codex/auth) and [non-interactive execution](https://developers.openai.com/codex/noninteractive). It consumes the logged-in account's Codex entitlement and is intended for a private, explicitly allowlisted bot.
+
+The CLI runs in a disposable directory with user config, external connections, shell, browser, subagents, image tools and hooks disabled. It receives only Dot role instructions and this chat's recent text history. Telegram/vault/API secrets are excluded from its environment. Conversation turns are saved in SQLite only after successful completion. Each group/topic/user still has its own history. Switching between `intelligence` and `codex` uses separate conversation bindings and does not copy cloud conversations.
+
+This mode provides **Telegram text chat**, not OpenDots page/computer tools or web approval cards. The existing web chat, Slack, calls and Intelligence learning still require their original services. The OAuth CLI and login must exist on the host; the stock Docker app image does not include or authenticate Codex. Use native Node.js to run this mode. Local models remain available through the original OpenAI-compatible model configuration; this OAuth backend does not select a local model.
+
 ### Groups and forum topics
 
 Add your bot to the group and explicitly allow its numeric chat ID (negative for groups/supergroups):

@@ -21,6 +21,7 @@ export class WorkspaceStore {
       CREATE TABLE IF NOT EXISTS dots(id TEXT PRIMARY KEY, spaceId TEXT NOT NULL, name TEXT NOT NULL, instructions TEXT NOT NULL, researchAllowed INTEGER NOT NULL, memoryAllowed INTEGER NOT NULL, createdAt INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS thread_bindings(id TEXT PRIMARY KEY, dotId TEXT NOT NULL, ownerId TEXT NOT NULL, title TEXT NOT NULL, createdAt INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS telegram_threads(chatId TEXT PRIMARY KEY, threadId TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS telegram_local_turns(id INTEGER PRIMARY KEY AUTOINCREMENT, threadId TEXT NOT NULL, prompt TEXT NOT NULL, reply TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS telegram_state(botId TEXT PRIMARY KEY, nextOffset INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS task_threads(taskId TEXT PRIMARY KEY, threadId TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS calls(id TEXT PRIMARY KEY, threadId TEXT NOT NULL, startedAt INTEGER NOT NULL, endedAt INTEGER, status TEXT NOT NULL, transcript TEXT NOT NULL, error TEXT);
@@ -261,6 +262,28 @@ export class WorkspaceStore {
         value.learningContainerId ?? null,
       );
     return value;
+  }
+  localTelegramHistory(
+    threadId: string,
+  ): Array<{ role: 'user' | 'assistant'; content: string }> {
+    this.requireThread(threadId);
+    const rows = this.db
+      .prepare(
+        'SELECT prompt, reply FROM telegram_local_turns WHERE threadId=? ORDER BY id DESC LIMIT 12',
+      )
+      .all(threadId) as Array<{ prompt: string; reply: string }>;
+    return rows.reverse().flatMap((row) => [
+      { role: 'user' as const, content: row.prompt },
+      { role: 'assistant' as const, content: row.reply },
+    ]);
+  }
+  saveLocalTelegramTurn(threadId: string, prompt: string, reply: string) {
+    this.requireThread(threadId);
+    this.db
+      .prepare(
+        'INSERT INTO telegram_local_turns(threadId, prompt, reply) VALUES (?, ?, ?)',
+      )
+      .run(threadId, prompt, reply);
   }
   telegramThread(chatId: string): string | undefined {
     const row = this.db

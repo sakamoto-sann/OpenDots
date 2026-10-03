@@ -104,7 +104,9 @@ _Connect, talk, mute, minimize, and return to chat. This is a silent screen capt
 
 Chat with your Dot through a Telegram bot. Private chats accept only the configured owner. In explicitly allowed groups/supergroups, the bot responds to mentions, `/start@BotUsername`, and replies to its messages from allowed users. Group history is separate for each user and forum topic; private history is never reused in a group.
 
-This fork also replaces the public-page browser's Playwright dependency with Stagehand v4. See [Telegram setup](docs/SETUP.md#telegram) and [browser setup](docs/SETUP.md#browser) for configuration. Automated Telegram fixtures and local browser checks pass; a live Telegram connection and final Docker image export still need verification.
+Telegram text chat can also use `TELEGRAM_BACKEND=codex` with an existing official Codex ChatGPT OAuth login and locally persisted history, without CopilotKit Intelligence. This mode does not provide page/computer tools.
+
+This fork also replaces the public-page browser's Playwright dependency with Stagehand v4. See [Telegram setup](docs/SETUP.md#telegram) and [browser setup](docs/SETUP.md#browser) for configuration. Automated Telegram fixtures, local browser checks, and a live private Telegram round trip using Codex ChatGPT OAuth have been verified. Final Docker image export remains unverified.
 
 ### Slack
 

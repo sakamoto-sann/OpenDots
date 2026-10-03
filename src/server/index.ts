@@ -9,7 +9,8 @@ import { createApp } from './app.js';
 import { WorkspaceStore } from './workspace.js';
 import { Platform } from './platform.js';
 import { TelegramBot } from './telegram-bot.js';
-import type { PlatformConfig } from './platform-config.js';
+import { telegramBackend, type PlatformConfig } from './platform-config.js';
+import { CodexTelegramPlatform } from './codex-telegram.js';
 const host = process.env.HOST ?? '127.0.0.1';
 const port = Number(process.env.PORT ?? 4310);
 const ownerToken = process.env.OWNER_TOKEN;
@@ -51,6 +52,9 @@ const config: PlatformConfig = {
     .map((value) => value.trim())
     .filter(Boolean),
   slackDotId: process.env.SLACK_DOT_ID || undefined,
+  telegramBackend: telegramBackend(process.env.TELEGRAM_BACKEND),
+  telegramCodexPath: process.env.TELEGRAM_CODEX_PATH || undefined,
+  telegramCodexModel: process.env.TELEGRAM_CODEX_MODEL || undefined,
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || undefined,
   telegramUserId: process.env.TELEGRAM_USER_ID || undefined,
   telegramDotId: process.env.TELEGRAM_DOT_ID || undefined,
@@ -66,7 +70,11 @@ const config: PlatformConfig = {
   ownerToken,
 };
 const platform = new Platform(store, workspace, config);
-const telegram = new TelegramBot(platform);
+const telegram = new TelegramBot(
+  config.telegramBackend === 'codex'
+    ? new CodexTelegramPlatform(platform)
+    : platform,
+);
 const researchConfig = {
   mode: 'live' as const,
   apiKey: config.apiKey,
