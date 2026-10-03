@@ -49,6 +49,8 @@ function fixture(failDelivery = false) {
   const fetcher = vi.fn(
     async (input: string | URL | Request, init?: RequestInit) => {
       const method = String(input).split('/').at(-1);
+      if (String(input).includes('/file/botfixture-token/photos/test.png'))
+        return new Response(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
       if (method === 'sendDocument' && init?.body instanceof FormData) {
         uploads.push(String(init.body.get('chat_id')));
         return Response.json({ ok: true, result: { message_id: 100 } });
@@ -60,7 +62,9 @@ function fixture(failDelivery = false) {
         if (failDelivery) throw new Error('fixture-secret-provider-error');
         sent.push(body);
         result = { message_id: sent.length };
-      } else if (method === 'getUpdates') {
+      } else if (method === 'getFile')
+        result = { file_path: 'photos/test.png', file_size: 8 };
+      else if (method === 'getUpdates') {
         offsets.push(body.offset);
         if (updates.length) {
           result = updates;
@@ -339,4 +343,31 @@ it('authorizes review callbacks against the original chat owner and saves and de
   expect(f.workspace.pages.list(dot.spaceId)).toHaveLength(1);
   expect(f.uploads).toEqual(['123']);
   expect(f.turn).not.toHaveBeenCalled();
+});
+
+it('handles a photo with only a bot mention in an allowed group', async () => {
+  const f = fixture();
+  f.config.telegramBackend = 'codex';
+  f.config.telegramGroupIds = ['-100'];
+  const photo = {
+    text: undefined,
+    caption: '@OpenDotsBot',
+    caption_entities: [{ type: 'mention', offset: 0, length: 12 }],
+    entities: undefined,
+    photo: [{ file_id: 'fixture-photo', file_size: 8 }],
+  };
+  f.updates([
+    groupMessage(1, { ...photo, from: { id: 999, is_bot: false } }),
+    groupMessage(2, photo),
+  ]);
+  f.start();
+  await vi.waitFor(() => expect(f.workspace.telegramOffset('321')).toBe(3));
+  expect(f.turn).toHaveBeenCalledOnce();
+  expect(f.turn).toHaveBeenCalledWith(
+    'telegram-thread',
+    'この画像を確認して説明してください。',
+    expect.any(AbortSignal),
+    expect.objectContaining({ ownerPrivate: false }),
+  );
+  expect(f.workspace.telegramImages('telegram-thread')).toHaveLength(1);
 });

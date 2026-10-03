@@ -1,3 +1,4 @@
+import { ConversationBusyError } from '../src/server/conversation-busy.js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Store } from '../src/server/store.js';
 import { Runner } from '../src/server/runner.js';
@@ -95,4 +96,30 @@ it('requeues active work on graceful shutdown instead of losing it', async () =>
   expect(store.tasks()[0].status).toBe('queued');
   expect(store.claim()).toBeTruthy();
   store.close();
+});
+
+it('requeues a busy conversation and preserves the recurring schedule for retry', async () => {
+  vi.useFakeTimers();
+  const store = new Store(':memory:');
+  let busy = true;
+  const runner = new Runner(store, config, async () => {
+    if (busy) throw new ConversationBusyError();
+    return { text: 'Completed', sources: [], sample: false };
+  });
+  try {
+    const task = store.createTask('Recurring fixture', 60);
+    await runner.tick();
+    expect(store.tasks()[0].status).toBe('queued');
+    expect(store.tasks()[0].intervalSeconds).toBe(60);
+    busy = false;
+    vi.setSystemTime(Date.now() + 5001);
+    await runner.tick();
+    const detail = store.detail(task.id);
+    expect(detail?.task.status).toBe('completed');
+    expect(detail?.task.nextRunAt).toBeGreaterThan(Date.now());
+  } finally {
+    runner.stop();
+    store.close();
+    vi.useRealTimers();
+  }
 });

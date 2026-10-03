@@ -1,10 +1,12 @@
 import { Store } from './store.js';
+import { ConversationBusyError } from './conversation-busy.js';
 import type { Result, Memory } from '../shared/types.js';
 import type { Claim } from './store.js';
 import { research, type Config } from './research.js';
 export class Runner {
   private timer?: ReturnType<typeof setInterval>;
   private active = new Map<string, AbortController>();
+  private retryAt = 0;
   constructor(
     private store: Store,
     private config: Config,
@@ -41,7 +43,7 @@ export class Runner {
       controller.abort(new Error('Run stopped because settings changed.'));
   }
   async tick() {
-    if (this.active.size) return;
+    if (this.active.size || Date.now() < this.retryAt) return;
     const claim = this.store.claim();
     if (!claim) return;
     const controller = new AbortController();
@@ -78,10 +80,16 @@ export class Runner {
       controller.signal.throwIfAborted();
       this.store.finish(claim, result);
     } catch (error) {
-      this.store.fail(
-        claim,
-        error instanceof Error ? error.message : 'Unexpected research failure.',
-      );
+      if (error instanceof ConversationBusyError) {
+        this.store.release(claim, 'Conversation is busy; queued for retry.');
+        this.retryAt = Date.now() + 5000;
+      } else
+        this.store.fail(
+          claim,
+          error instanceof Error
+            ? error.message
+            : 'Unexpected research failure.',
+        );
     } finally {
       clearInterval(ownershipCheck);
       clearTimeout(timeout);

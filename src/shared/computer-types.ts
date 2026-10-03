@@ -47,6 +47,7 @@ const ref = {
   snapshotId: z.number().int().nonnegative(),
 };
 export const computerInputs = {
+  browse: z.object({ url: z.string().url().max(2048) }).strict(),
   navigate: z
     .object({
       url: z

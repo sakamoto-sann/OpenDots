@@ -319,6 +319,7 @@ export class TelegramBot {
       senderId !== userId
     )
       return;
+    if (!text.trim() && hasImage) text = 'この画像を確認して説明してください。';
     if (!text.trim()) return;
     const prefix =
       this.platform.config.telegramBackend === 'codex' ? 'codex:' : '';

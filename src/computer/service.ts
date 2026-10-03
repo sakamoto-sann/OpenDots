@@ -327,6 +327,9 @@ export async function startComputer() {
           stdoutPipe.on('data', (chunk) => receive(chunk, false));
           stderrPipe.on('data', (chunk) => receive(chunk, true));
           child.once('error', fail);
+          child.once('exit', (code) => {
+            if (code !== 0) fail();
+          });
           req.once('aborted', fail);
           res.once('close', () => {
             if (!res.writableEnded) fail();
@@ -347,16 +350,17 @@ export async function startComputer() {
         return reply(200, result);
       }
       const target = await current();
-      if (action === 'navigate') {
+      if (action === 'navigate' || action === 'browse') {
         await validateUrl(String(parsed.url));
         invalidate();
         await target.goto(String(parsed.url), { timeout: 30000 });
-        return reply(200, {
-          url: await target.url(),
-          title: await target.title(),
-        });
+        if (action === 'navigate')
+          return reply(200, {
+            url: await target.url(),
+            title: await target.title(),
+          });
       }
-      if (action === 'read')
+      if (action === 'read' || action === 'browse')
         return reply(200, {
           url: await target.url(),
           title: await target.title(),

@@ -93,7 +93,6 @@ export function dotServerTools(
       check();
       if (!store.settings().researchAllowed)
         throw new Error('Research permission is disabled.');
-      await computer.action(dotId, 'navigate', { url }, 'agent', signal);
       const page = z
         .object({
           title: z.string(),
@@ -103,7 +102,9 @@ export function dotServerTools(
             .array(z.object({ title: z.string(), url: z.string().url() }))
             .optional(),
         })
-        .parse(await computer.action(dotId, 'read', {}, 'agent', signal));
+        .parse(
+          await computer.action(dotId, 'browse', { url }, 'agent', signal),
+        );
       check();
       workspace.saveCapture(threadId, {
         sample: false,

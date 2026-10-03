@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ConversationBusyError } from './conversation-busy.js';
 import { dotServerTools } from './dot-server-tools.js';
 import type { CodexTool, ChatImage } from './codex-tool-gateway.js';
 import { randomUUID } from 'node:crypto';
@@ -47,8 +48,7 @@ export class CodexTelegramPlatform implements TelegramPlatform {
       (!dot.researchAllowed || !this.store.settings().researchAllowed)
     )
       throw new Error('Research disabled');
-    if (this.busy.has(threadId))
-      throw new Error('This conversation is busy. Retry shortly.');
+    if (this.busy.has(threadId)) throw new ConversationBusyError();
     this.busy.add(threadId);
     const controller = new AbortController();
     const combined = AbortSignal.any([signal, controller.signal]);
