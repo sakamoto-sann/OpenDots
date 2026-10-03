@@ -27,6 +27,7 @@ int main(int argc, char **argv) {
   pid_t child = fork();
   if (child < 0) return 125;
   if (child == 0) {
+    close(3); // The command cannot write to the runner's result channel.
     execl("/bin/sh", "sh", "-c", argv[1], (char *)NULL);
     _exit(127);
   }
@@ -41,8 +42,11 @@ int main(int argc, char **argv) {
     int remaining;
     pid_t done;
     do { done = waitpid(-1, &remaining, WNOHANG); } while (done > 0);
-    if (done < 0 && errno == ECHILD)
-      return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+    if (done < 0 && errno == ECHILD) {
+      int exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+      if (dprintf(3, "result:%d\n", exit_code) < 0) return 125;
+      return 0;
+    }
     struct timespec pause = {0, 10000000};
     nanosleep(&pause, NULL);
   }

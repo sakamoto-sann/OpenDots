@@ -19,6 +19,7 @@ import {
 } from 'node:fs/promises';
 import { resolve, dirname, relative } from 'node:path';
 import { spawn } from 'node:child_process';
+import type { Readable } from 'node:stream';
 import { createServer as reservePort } from 'node:net';
 import {
   computerInputs,
@@ -145,8 +146,7 @@ export async function startComputer() {
       throw new Error('Path denied');
     if (writing) {
       try {
-        if ((await lstat(candidate)).isSymbolicLink())
-          throw new Error('Path denied');
+        if (!(await lstat(candidate)).isFile()) throw new Error('Path denied');
         const existing = await realpath(candidate);
         if (!existing.startsWith(root + '/')) throw new Error('Path denied');
       } catch (error) {
@@ -245,7 +245,9 @@ export async function startComputer() {
             ),
           });
         if (action === 'files_read') {
-          if ((await stat(path)).size > 100000) throw new Error('File limit');
+          const info = await stat(path);
+          if (!info.isFile() || info.size > 100000)
+            throw new Error('File limit');
           return reply(200, { contents: await readFile(path, 'utf8') });
         }
         await writeFile(path, String(parsed.contents), {
@@ -269,12 +271,13 @@ export async function startComputer() {
         }>((resolve, reject) => {
           let stdout = '',
             stderr = '',
+            reported = '',
             size = 0,
             failure: Error | undefined;
           const child = spawn('/app/command-runner', [String(parsed.command)], {
             cwd: root,
             detached: true,
-            stdio: ['ignore', 'pipe', 'pipe'],
+            stdio: ['ignore', 'pipe', 'pipe', 'pipe'],
             env: {
               PATH: process.env.PATH,
               HOME: process.env.HOME,
@@ -301,6 +304,13 @@ export async function startComputer() {
           const timeout = setTimeout(fail, Number(parsed.timeoutMs));
           child.stdout.setEncoding('utf8');
           child.stderr.setEncoding('utf8');
+          const statusPipe = child.stdio[3] as Readable;
+          statusPipe.setEncoding('utf8');
+          statusPipe.on('data', (value: string) => {
+            reported += value;
+            if (reported.length > 32) fail();
+          });
+          statusPipe.on('error', fail);
           const receive = (chunk: string, error: boolean) => {
             size += Buffer.byteLength(chunk);
             if (size > 100000) fail();
@@ -317,13 +327,14 @@ export async function startComputer() {
           child.once('close', (code) => {
             clearTimeout(timeout);
             kill();
-            if (code === 125) {
+            const status = /^result:(\d{1,3})\n$/.exec(reported);
+            if (code !== 0 || !status || Number(status[1]) > 255) {
               fail();
               return;
             }
             if (failure || code === null)
               reject(failure ?? new Error('Command failed'));
-            else resolve({ stdout, stderr, exitCode: code });
+            else resolve({ stdout, stderr, exitCode: Number(status[1]) });
           });
         });
         return reply(200, result);
