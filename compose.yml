@@ -2,6 +2,7 @@ services:
   app:
     build:
       context: .
+      secrets: [npmrc]
       target: app
     ports:
       - '127.0.0.1:4310:4310'
@@ -46,6 +47,7 @@ services:
     profiles: [browser]
     build:
       context: .
+      secrets: [npmrc]
       target: browser
     environment:
       BROWSER_SECRET: ${BROWSER_SECRET:-}
@@ -69,3 +71,7 @@ networks:
   browser-egress:
 volumes:
   opendots-data:
+
+secrets:
+  npmrc:
+    file: ${NPM_GUARD_NPMRC:-/dev/null}

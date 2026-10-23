@@ -7,6 +7,7 @@ services:
     image: opendots-computer:stagehand-v4
     build:
       context: .
+      secrets: [npmrc]
       target: computer
     command: ['true']
     entrypoint: []
@@ -14,6 +15,7 @@ services:
     image: opendots-supervisor:b6932d3-dot-auth-node
     build:
       context: .
+      secrets: [npmrc]
       dockerfile: deployment/computers/supervisor.Dockerfile
       additional_contexts:
         openbot: https://github.com/CopilotKit/OpenBot.git#b6932d31a8d6e7896c15139dfc27a6c6911deb27
@@ -53,3 +55,7 @@ networks:
   computer-control:
     # Host-run apps reach the supervisor through its loopback-only published port.
     driver: bridge
+
+secrets:
+  npmrc:
+    file: ${NPM_GUARD_NPMRC:-/dev/null}
