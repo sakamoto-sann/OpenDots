@@ -10,3 +10,14 @@ RESEARCH.md
 docs
 *.sqlite*
 *.db*
+
+# Registry credentials are supplied only as BuildKit secrets.
+.npmrc
+.pnpmrc
+.yarnrc.yml
+.netrc
+
+**/.npmrc
+**/.pnpmrc
+**/.yarnrc.yml
+**/.netrc

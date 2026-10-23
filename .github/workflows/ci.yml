@@ -14,6 +14,7 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      - run: node --test deployment/security/guard-lock.check.mjs
       - run: npm ci
       - run: npm run check-format
       - run: npm run lint

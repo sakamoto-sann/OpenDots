@@ -19,6 +19,8 @@ Supply both secret values privately. The supervisor token authorizes lifecycle r
 
 Build both images before starting the supervisor:
 
+Before building containers, [configure the existing Takumi guard](../deployment/security/README.md) and export `NPM_GUARD_NPMRC` to its configuration file path. The guard must be reachable from BuildKit through Tailscale.
+
 ```sh
 docker compose -f compose.computers.yml build computer-image computer-supervisor
 docker compose -f compose.computers.yml up -d computer-supervisor
