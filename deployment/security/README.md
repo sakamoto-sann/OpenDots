@@ -11,3 +11,5 @@ For Compose builds, set `NPM_GUARD_NPMRC` to the existing guard configuration fi
 Starting existing images does not require a registry configuration. Without the build configuration, Compose supplies `/dev/null` and the package preflight rejects the build before any package install.
 
 Node explicitly uses OpenSSL CA mode. Chromium receives explicit `p,p,p` distrust entries for the four incident/cross-sign roots in its Linux NSS store; environment variables alone do not configure Chromium trust. The included distrust certificates are public roots, not credentials.
+
+Bun 1.4.4 is required for its intrinsic incident-chain rejection. Bun treats `SSL_CERT_FILE` as additional trust; do not interpret this bundle as an exclusive Bun root store. The installer also receives an explicit `--cafile`, and runtime incident rejection must be verified independently (all 12 paths rejected in the tested image).
