@@ -57,12 +57,11 @@ export function prepareLockfile({ configuration, manifest, file, source }) {
   const registry = parseUrl(endpoint);
   const ip = registry.hostname.split('.').map(Number);
   const localGuard =
-    registry.hostname === '127.0.0.1' ||
-    (ip.length === 4 &&
-      ip.every((v) => Number.isInteger(v) && v >= 0 && v <= 255) &&
-      ip[0] === 100 &&
-      ip[1] >= 64 &&
-      ip[1] <= 127);
+    ip.length === 4 &&
+    ip.every((v) => Number.isInteger(v) && v >= 0 && v <= 255) &&
+    ip[0] === 100 &&
+    ip[1] >= 64 &&
+    ip[1] <= 127;
   if (
     !localGuard ||
     registry.protocol !== 'http:' ||
@@ -75,7 +74,7 @@ export function prepareLockfile({ configuration, manifest, file, source }) {
     registries.some((v) => v.replace(/\/$/, '') !== endpoint.slice(0, -1))
   )
     throw new Error(
-      'Build requires the existing loopback or Tailscale Takumi guard registry.',
+      'Build requires the existing Tailscale Takumi guard registry reachable from BuildKit.',
     );
   validateManifest(manifest);
   function rewrite(value) {

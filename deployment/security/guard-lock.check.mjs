@@ -25,6 +25,7 @@ test('routes a pinned archive through the guard without changing version or inte
 test('fails closed without a guard or when a public registry is supplied', () => {
   for (const configuration of [
     '',
+    'registry=http://127.0.0.1:4873/',
     '@fixture:registry=http://100.64.0.1:4873/',
     'registry=https://registry.npmjs.org/',
     'registry=https://npm.flatt.tech/',
