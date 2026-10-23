@@ -169,6 +169,8 @@ A configured key is not evidence of a successful call. Verify microphone access,
 
 Set `OWNER_TOKEN` and `BROWSER_SECRET` to different random secrets of at least 24 characters in `.env`, then run:
 
+Before building containers, [configure the existing Takumi guard](../deployment/security/README.md) and export `NPM_GUARD_NPMRC` to its configuration file path. The guard must be reachable from BuildKit through Tailscale.
+
 ```sh
 docker compose up --build -d
 ```

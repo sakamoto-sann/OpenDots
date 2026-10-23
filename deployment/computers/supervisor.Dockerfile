@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Supply the existing Takumi-guard npmrc as a BuildKit secret; never embed registry credentials.
 # Source comes from the exact OpenBot revision in compose.computers.yml.
-FROM oven/bun:1.4.4-alpine
+FROM oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a
 COPY deployment/security/ /opt/security-ca/
 ENV SSL_CERT_FILE=/opt/security-ca/ca.pem SSL_CERT_DIR=/opt/security-ca/empty-ca-dir REQUESTS_CA_BUNDLE=/opt/security-ca/ca.pem CURL_CA_BUNDLE=/opt/security-ca/ca.pem PIP_CERT=/opt/security-ca/ca.pem
 WORKDIR /app

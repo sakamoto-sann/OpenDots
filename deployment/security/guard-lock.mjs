@@ -3,7 +3,13 @@ import { pathToFileURL } from 'node:url';
 
 const packageName = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 function registrySpec(value) {
-  if (typeof value !== 'string' || !value || value.length > 300) return false;
+  if (
+    typeof value !== 'string' ||
+    !value ||
+    value.startsWith('.') ||
+    value.length > 300
+  )
+    return false;
   if (value.startsWith('npm:')) {
     const alias = /^npm:((?:@[^/]+\/)?[^@]+)@(.+)$/.exec(value);
     return !!(alias && packageName.test(alias[1]) && registrySpec(alias[2]));
@@ -91,7 +97,7 @@ export function prepareLockfile({ configuration, manifest, file, source }) {
   }
   if (file === 'package-lock.json') {
     const lock = JSON.parse(source);
-    if (![2, 3].includes(lock.lockfileVersion) || !lock.packages)
+    if (lock.lockfileVersion !== 3 || !lock.packages)
       throw new Error('Unsupported npm lockfile.');
     for (const [name, entry] of Object.entries(lock.packages)) {
       if (!name) continue;
@@ -106,9 +112,46 @@ export function prepareLockfile({ configuration, manifest, file, source }) {
     return JSON.stringify(lock, null, 2) + '\n';
   }
   if (file === 'bun.lock') {
-    if (/(?:git\+|git:|github:|file:|link:)/i.test(source))
-      throw new Error('Non-registry Bun dependency denied.');
-    return source.replace(/https?:\/\/[^\s"'\],)]+/g, rewrite);
+    // Bun's native parser decodes JSONC/JSON5 escapes before source validation.
+    const lock = globalThis.Bun?.JSON5?.parse
+      ? globalThis.Bun.JSON5.parse(source)
+      : JSON.parse(source);
+    if (lock.lockfileVersion !== 1 || !lock.packages)
+      throw new Error('Unsupported Bun lockfile.');
+    for (const workspace of Object.values(lock.workspaces || {}))
+      validateManifest(workspace);
+    for (const entry of Object.values(lock.packages)) {
+      if (
+        !Array.isArray(entry) ||
+        entry.length !== 4 ||
+        !/^sha(?:256|384|512)-[A-Za-z0-9+/=]+$/.test(entry[3] || '')
+      )
+        throw new Error('Bun dependency lacks registry integrity.');
+      const resolved = /^((?:@[^/]+\/)?[^@]+)@(.+)$/.exec(entry[0] || '');
+      if (
+        !resolved ||
+        !packageName.test(resolved[1]) ||
+        !registrySpec(resolved[2])
+      )
+        throw new Error('Non-registry Bun dependency denied.');
+      if (entry[1]) entry[1] = rewrite(entry[1]);
+      validateManifest(entry[2]);
+    }
+    function decoded(value) {
+      if (typeof value === 'string') {
+        if (/^https?:\/\//i.test(value)) return rewrite(value);
+        if (/(?:git\+|git:|github:|file:|link:|workspace:)/i.test(value))
+          throw new Error('Non-registry Bun source denied.');
+        return value;
+      }
+      if (Array.isArray(value)) return value.map(decoded);
+      if (value && typeof value === 'object')
+        return Object.fromEntries(
+          Object.entries(value).map(([k, v]) => [k, decoded(v)]),
+        );
+      return value;
+    }
+    return JSON.stringify(decoded(lock), null, 2) + '\n';
   }
   throw new Error('Unsupported lockfile.');
 }

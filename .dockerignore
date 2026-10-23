@@ -16,3 +16,8 @@ docs
 .pnpmrc
 .yarnrc.yml
 .netrc
+
+**/.npmrc
+**/.pnpmrc
+**/.yarnrc.yml
+**/.netrc
